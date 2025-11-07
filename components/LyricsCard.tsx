@@ -48,19 +48,19 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, 
   return (
     <div
       ref={ref}
-      className={`w-[360px] p-8 rounded-2xl flex flex-col transition-all duration-300 ${fontFamily}`}
+      className={`w-full max-w-[360px] mx-auto p-6 rounded-2xl flex flex-col transition-all duration-300 ${fontFamily}`}
       style={{ background: background }}
     >
       {/* Header Section */}
-      <div className="flex items-center">
+      <div className="flex items-center gap-4">
         <img 
           src={song.album.images[0]?.url || 'https://picsum.photos/100'} 
           alt={song.album.name} 
-          className="relative w-16 h-16 rounded-md shadow-md flex-shrink-0"
+          className="w-16 h-16 rounded-md shadow-md flex-shrink-0 object-cover"
         />
-        <div className="ml-4 min-w-0 self-stretch flex flex-col justify-center">
-          <p className={`text-lg font-bold truncate ${textColor}`} style={textStyle}>{song.name}</p>
-          <p className={`text-sm opacity-80 truncate ${textColor}`} style={textStyle}>{song.artists.map(a => a.name).join(', ')}</p>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <p className={`text-lg font-bold leading-tight break-words ${textColor}`} style={textStyle}>{song.name}</p>
+          <p className={`text-sm opacity-80 leading-tight mt-1 break-words ${textColor}`} style={textStyle}>{song.artists.map(a => a.name).join(', ')}</p>
         </div>
       </div>
       
@@ -70,7 +70,7 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, 
       {/* Lyrics Section */}
       <div className="space-y-2">
         {lyrics.map((line, index) => (
-          <p key={index} className={`${fontSize} font-bold leading-tight ${textColor}`} style={textStyle}>
+          <p key={index} className={`${fontSize} font-bold leading-tight whitespace-pre-wrap break-words ${textColor}`} style={textStyle}>
             {line}
           </p>
         ))}
