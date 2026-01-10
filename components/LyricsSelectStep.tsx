@@ -5,12 +5,12 @@ import Spinner from './Spinner';
 interface LyricsSelectStepProps {
   song: Track;
   lyrics: LyricsLine[] | null;
-  selectedLyrics: string[];
-  onLyricSelect: (line: string) => void;
+  selectedIndices: number[];
+  onLyricSelect: (index: number) => void;
   isLoading: boolean;
 }
 
-const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({ song, lyrics, selectedLyrics, onLyricSelect, isLoading }) => {
+const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({ song, lyrics, selectedIndices, onLyricSelect, isLoading }) => {
   return (
     <div>
       <div className="text-center mb-6">
@@ -36,9 +36,9 @@ const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({ song, lyrics, selec
           {lyrics.map((line, index) => (
             <div
               key={`${line.time}-${index}`}
-              onClick={() => onLyricSelect(line.line)}
+              onClick={() => onLyricSelect(index)}
               className={`p-3 my-1 rounded-md cursor-pointer transition-all duration-200 text-center text-lg ${
-                selectedLyrics.includes(line.line)
+                selectedIndices.includes(index)
                   ? 'bg-brand-green text-white scale-105'
                   : 'bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200'
               }`}

@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { Track, CustomizationOptions } from '../types';
 import { PRESET_COLORS, FONT_OPTIONS, FONT_SIZE_OPTIONS, TEXT_EFFECT_OPTIONS } from '../constants';
@@ -295,8 +296,10 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
       </div>
 
       {/* Preview */}
-      <div className="lg:w-2/3 flex-grow flex items-center justify-center p-4 bg-gray-100 dark:bg-brand-gray-500 rounded-lg">
-        <LyricsCard ref={cardRef} song={song} lyrics={lyrics} customization={customization} />
+      <div className="lg:w-2/3 flex-grow bg-gray-100 dark:bg-brand-gray-500 rounded-lg overflow-auto flex p-4">
+        <div className="m-auto">
+          <LyricsCard ref={cardRef} song={song} lyrics={lyrics} customization={customization} />
+        </div>
       </div>
     </div>
   );

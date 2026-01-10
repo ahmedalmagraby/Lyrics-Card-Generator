@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppStep, Track, LyricsLine, CustomizationOptions } from './types';
 import { searchTracks } from './services/spotifyService';
 import { fetchLyrics } from './services/lyricsService';
@@ -17,7 +17,9 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [selectedSong, setSelectedSong] = useState<Track | null>(null);
   const [lyrics, setLyrics] = useState<LyricsLine[] | null>(null);
-  const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
+  // Store indices to handle duplicate lines correctly and maintain song order
+  const [selectedLineIndices, setSelectedLineIndices] = useState<number[]>([]);
+  
   const [customization, setCustomization] = useState<CustomizationOptions>({
     background: PRESET_COLORS[0],
     isTextLight: true,
@@ -63,7 +65,7 @@ export default function App() {
     setError(null);
     setSelectedSong(song);
     setLyrics(null);
-    setSelectedLyrics([]);
+    setSelectedLineIndices([]);
     setStep(AppStep.SELECT_LYRICS);
     try {
       const lyricsData = await fetchLyrics(song.artists[0].name, song.name, song.album.name);
@@ -82,10 +84,16 @@ export default function App() {
     }
   };
   
-  const handleLyricsSelect = (line: string) => {
-    setSelectedLyrics(prev => 
-      prev.includes(line) ? prev.filter(l => l !== line) : [...prev, line]
-    );
+  const handleLyricsSelect = (index: number) => {
+    setSelectedLineIndices(prev => {
+      // Toggle selection
+      const newIndices = prev.includes(index) 
+        ? prev.filter(i => i !== index) 
+        : [...prev, index];
+      
+      // Always sort indices to maintain chronological order from the song
+      return newIndices.sort((a, b) => a - b);
+    });
   };
 
   const handleNextStep = () => {
@@ -104,7 +112,7 @@ export default function App() {
         setStep(AppStep.SELECT_SONG);
         setSelectedSong(null);
         setLyrics(null);
-        setSelectedLyrics([]);
+        setSelectedLineIndices([]);
         break;
       case AppStep.SELECT_SONG:
         setStep(AppStep.SEARCH);
@@ -112,6 +120,11 @@ export default function App() {
         break;
     }
   };
+
+  // Derived state for the Customize Step
+  const selectedLyricsLines = lyrics 
+    ? selectedLineIndices.map(i => lyrics[i].line) 
+    : [];
 
   const renderStep = () => {
     switch (step) {
@@ -123,14 +136,14 @@ export default function App() {
         return <LyricsSelectStep 
                   song={selectedSong!} 
                   lyrics={lyrics}
-                  selectedLyrics={selectedLyrics}
+                  selectedIndices={selectedLineIndices}
                   onLyricSelect={handleLyricsSelect}
                   isLoading={isLoading} 
                />;
       case AppStep.CUSTOMIZE:
         return <CustomizeStep 
                   song={selectedSong!} 
-                  lyrics={selectedLyrics} 
+                  lyrics={selectedLyricsLines} 
                   customization={customization}
                   setCustomization={setCustomization}
                />;
@@ -166,7 +179,7 @@ export default function App() {
                 </button>
               
               {step === AppStep.SELECT_LYRICS && (
-                <button onClick={handleNextStep} disabled={selectedLyrics.length === 0} className="px-6 py-2 bg-brand-green text-white font-bold rounded-full hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button onClick={handleNextStep} disabled={selectedLineIndices.length === 0} className="px-6 py-2 bg-brand-green text-white font-bold rounded-full hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   Continue
                 </button>
               )}

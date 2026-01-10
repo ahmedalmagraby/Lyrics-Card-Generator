@@ -48,29 +48,30 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, 
   return (
     <div
       ref={ref}
-      className={`w-full max-w-[360px] mx-auto p-6 rounded-2xl flex flex-col transition-all duration-300 ${fontFamily}`}
+      className={`w-[400px] min-h-[500px] flex-shrink-0 mx-auto p-8 rounded-2xl flex flex-col transition-all duration-300 shadow-2xl ${fontFamily}`}
       style={{ background: background }}
     >
       {/* Header Section */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-5">
         <img 
           src={song.album.images[0]?.url || 'https://picsum.photos/100'} 
           alt={song.album.name} 
-          className="w-16 h-16 rounded-md shadow-md flex-shrink-0 object-cover"
+          crossOrigin="anonymous"
+          className="w-20 h-20 rounded-lg shadow-md flex-shrink-0 object-cover"
         />
         <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <p className={`text-lg font-bold leading-tight break-words ${textColor}`} style={textStyle}>{song.name}</p>
-          <p className={`text-sm opacity-80 leading-tight mt-1 break-words ${textColor}`} style={textStyle}>{song.artists.map(a => a.name).join(', ')}</p>
+          <p className={`text-2xl font-bold leading-tight break-words ${textColor}`} style={textStyle}>{song.name}</p>
+          <p className={`text-base opacity-90 leading-tight mt-1 break-words ${textColor}`} style={textStyle}>{song.artists.map(a => a.name).join(', ')}</p>
         </div>
       </div>
       
       {/* Fading Gradient Separator */}
-      <div className="w-full my-4" style={separatorStyle}></div>
+      <div className="w-full my-6" style={separatorStyle}></div>
 
       {/* Lyrics Section */}
-      <div className="space-y-2">
+      <div className="space-y-4 flex-grow">
         {lyrics.map((line, index) => (
-          <p key={index} className={`${fontSize} font-bold leading-tight whitespace-pre-wrap break-words ${textColor}`} style={textStyle}>
+          <p key={index} className={`${fontSize} font-bold leading-snug whitespace-pre-wrap break-words ${textColor}`} style={textStyle}>
             {line}
           </p>
         ))}
