@@ -1,7 +1,3 @@
-Here is a comprehensive `README.md` for the Lyrics Card Generator repository, based on the codebase provided.
-
----
-
 # Lyrics Card Generator
 
 A beautiful and interactive React application that allows users to create aesthetic lyric cards for their favorite songs. Search for tracks, select specific lyrics, customize the visual style, and download or share high-quality images.
