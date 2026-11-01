@@ -23,7 +23,7 @@ A React app for turning your favorite song lyrics into shareable image cards. Se
 * [Vite](https://vitejs.dev/) 6
 * [Tailwind CSS](https://tailwindcss.com/) 4 via `@tailwindcss/vite`
 * Self-hosted fonts via [Fontsource](https://fontsource.org/)
-* [html2canvas](https://html2canvas.hertzen.com/) for image export (loaded on demand)
+* [modern-screenshot](https://github.com/qq15725/modern-screenshot) for image export (loaded on demand)
 * [Vitest](https://vitest.dev/) for unit tests
 
 ## APIs used

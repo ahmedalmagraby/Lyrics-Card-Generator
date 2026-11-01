@@ -1,32 +1,19 @@
-/** Attribute on the element that scales the preview to fit small screens; reset before capture. */
-export const PREVIEW_SCALER_ATTR = 'data-card-scaler';
-
-/** Renders a DOM node to a high-resolution PNG. html2canvas is loaded on demand. */
+/**
+ * Renders a DOM node to a high-resolution PNG. modern-screenshot is loaded on demand and
+ * draws the node through the browser's own layout engine (an SVG foreignObject), so the
+ * image matches what's on screen, including text positioning and fonts.
+ */
 export async function renderToBlob(node: HTMLElement): Promise<Blob> {
-  const [{ default: html2canvas }] = await Promise.all([import('html2canvas'), document.fonts.ready]);
-  const canvas = await html2canvas(node, {
+  const [{ domToBlob }] = await Promise.all([import('modern-screenshot'), document.fonts.ready]);
+  return domToBlob(node, {
+    // Layout size, not the on-screen size: the preview is scaled down with a CSS transform on phones.
+    width: node.offsetWidth,
+    height: node.offsetHeight,
     scale: 3,
+    type: 'image/png',
     backgroundColor: null,
-    useCORS: true,
-    logging: false,
-    onclone: doc => {
-      // Animations restart in the cloned document; freeze everything at its final state.
-      const style = doc.createElement('style');
-      style.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; }';
-      doc.head.appendChild(style);
-      // html2canvas reads the page background even when capturing one element, and it
-      // can't parse Tailwind v4's oklch() colors. The card itself uses hex/rgba only.
-      for (const el of [doc.documentElement, doc.body]) {
-        el.style.backgroundColor = 'transparent';
-        el.style.color = '#000';
-      }
-      doc.querySelectorAll<HTMLElement>(`[${PREVIEW_SCALER_ATTR}]`).forEach(el => {
-        el.style.transform = 'none';
-      });
-    },
-  });
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Could not encode image'))), 'image/png');
+    // Don't set `font.preferredFormat`: in modern-screenshot 4.7 it drops the data of every
+    // other @font-face (e.g. bold Latin), so text silently falls back to another font.
   });
 }
 

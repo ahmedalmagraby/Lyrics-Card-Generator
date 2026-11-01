@@ -12,7 +12,7 @@ import {
 } from '../constants';
 import { prefersLightTextFor } from '../utils/color';
 import { cardFilename } from '../utils/filename';
-import { canCopyImage, canShareFiles, downloadBlob, PREVIEW_SCALER_ATTR, renderToBlob } from '../utils/exportImage';
+import { canCopyImage, canShareFiles, downloadBlob, renderToBlob } from '../utils/exportImage';
 import LyricsCard from './LyricsCard';
 import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon, ShareIcon } from './Icons';
 import Spinner from './Spinner';
@@ -215,7 +215,6 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
           >
             <div style={{ width: CARD_WIDTH * scale, height: cardHeight * scale }}>
               <div
-                {...{ [PREVIEW_SCALER_ATTR]: '' }}
                 className="rounded-2xl shadow-2xl"
                 style={{ width: CARD_WIDTH, transform: `scale(${scale})`, transformOrigin: 'top left' }}
               >

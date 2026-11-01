@@ -9,9 +9,6 @@ interface LyricsCardProps {
   customization: CustomizationOptions;
 }
 
-// Colors on the card are plain hex/rgba inline styles on purpose: html2canvas
-// cannot parse Tailwind v4's oklch() palette colors.
-
 const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, customization }, ref) => {
   const { background, isTextLight, fontFamily, fontSize, textEffect, textAlign, cardSize } = customization;
   const textColor = isTextLight ? '#ffffff' : '#000000';
@@ -40,17 +37,16 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, 
   return (
     <div
       ref={ref}
-      className={`p-8 rounded-2xl flex flex-col overflow-hidden ${fontFamily}`}
+      className={`p-6 rounded-2xl flex flex-col overflow-hidden ${fontFamily}`}
       style={{
         width: CARD_WIDTH,
         height: aspect ? Math.round(CARD_WIDTH / aspect) : undefined,
-        minHeight: aspect ? undefined : 500,
         background: backgroundToCss(background),
         color: textColor,
         textShadow,
       }}
     >
-      <div className="flex items-center gap-5 shrink-0">
+      <div className="flex items-center gap-3.5 shrink-0">
         <img
           src={song.artworkUrl || PLACEHOLDER_ARTWORK}
           onError={e => {
@@ -58,27 +54,27 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, 
           }}
           alt={song.album}
           crossOrigin="anonymous"
-          width={80}
-          height={80}
-          className="w-20 h-20 rounded-lg shrink-0 object-cover"
+          width={64}
+          height={64}
+          className="w-16 h-16 rounded-lg shrink-0 object-cover"
           style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}
         />
         <div className="flex-1 min-w-0">
           <p className="text-2xl font-bold leading-tight break-words">{song.name}</p>
-          <p className="text-base leading-tight mt-1 break-words" style={{ opacity: 0.9 }}>
+          <p className="text-base leading-tight mt-0.5 break-words" style={{ opacity: 0.9 }}>
             {song.artist}
           </p>
         </div>
       </div>
 
-      <div className="w-full my-6 shrink-0" style={separatorStyle} />
+      <div className="w-full my-4 shrink-0" style={separatorStyle} />
 
       <div
-        className={`flex-grow flex flex-col gap-4 ${aspect ? 'justify-center' : ''}`}
+        className={`flex-grow flex flex-col gap-2.5 ${aspect ? 'justify-center' : ''}`}
         style={{ textAlign }}
       >
         {lyrics.map((line, index) => (
-          <p key={index} className={`${fontSize} font-bold leading-snug whitespace-pre-wrap break-words`}>
+          <p key={index} className={`${fontSize} font-bold leading-tight whitespace-pre-wrap break-words`}>
             {line}
           </p>
         ))}
