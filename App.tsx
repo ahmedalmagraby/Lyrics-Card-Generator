@@ -1,192 +1,330 @@
-import React, { useState, useEffect } from 'react';
-import { AppStep, Track, LyricsLine, CustomizationOptions } from './types';
-import { searchTracks } from './services/spotifyService';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppStep, CustomizationOptions, LyricsResult, Track } from './types';
+import { searchTracks } from './services/itunesService';
 import { fetchLyrics } from './services/lyricsService';
-import { PRESET_COLORS, FONT_OPTIONS, FONT_SIZE_OPTIONS } from './constants';
+import { FONT_OPTIONS, FONT_SIZE_OPTIONS, GRADIENT_PRESETS, PRESET_COLORS } from './constants';
+import { prefersLightText } from './utils/color';
+import { extractColors } from './utils/extractColors';
 import StepIndicator from './components/StepIndicator';
 import SearchStep from './components/SearchStep';
-import SongSelectStep from './components/SongSelectStep';
 import LyricsSelectStep from './components/LyricsSelectStep';
 import CustomizeStep from './components/CustomizeStep';
-import { MoonIcon, SunIcon } from './components/Icons';
+import { ArrowLeftIcon, ArrowRightIcon, LogoIcon, MoonIcon, SunIcon } from './components/Icons';
 
-export default function App() {
-  const [step, setStep] = useState<AppStep>(AppStep.SEARCH);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [query, setQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Track[]>([]);
-  const [selectedSong, setSelectedSong] = useState<Track | null>(null);
-  const [lyrics, setLyrics] = useState<LyricsLine[] | null>(null);
-  // Store indices to handle duplicate lines correctly and maintain song order
-  const [selectedLineIndices, setSelectedLineIndices] = useState<number[]>([]);
-  
-  const [customization, setCustomization] = useState<CustomizationOptions>({
-    background: PRESET_COLORS[0],
-    isTextLight: true,
-    fontFamily: FONT_OPTIONS[0].className,
-    fontSize: FONT_SIZE_OPTIONS[1].className, // Default to Medium
-    textEffect: 'none',
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
+  background: {
+    type: 'solid',
+    color: PRESET_COLORS[0],
+    gradientFrom: GRADIENT_PRESETS[0].from,
+    gradientTo: GRADIENT_PRESETS[0].to,
+    angle: 45,
+  },
+  isTextLight: true,
+  fontFamily: FONT_OPTIONS[0].className,
+  fontSize: FONT_SIZE_OPTIONS[1].className,
+  textEffect: 'none',
+  textAlign: 'left',
+  cardSize: 'classic',
+};
+
+const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
+
+function useTheme() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
+    document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  );
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+  // Follow the OS setting until the user picks a theme explicitly.
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => {
+      try {
+        if (localStorage.getItem('theme')) return;
+      } catch { /* storage unavailable */ }
+      setTheme(e.matches ? 'dark' : 'light');
+    };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  const toggle = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    try {
+      localStorage.setItem('theme', next);
+    } catch { /* storage unavailable */ }
   };
+
+  return [theme, toggle] as const;
+}
+
+export default function App() {
+  const [theme, toggleTheme] = useTheme();
+  const [step, setStep] = useState<AppStep>(AppStep.SEARCH);
+
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Track[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const [selectedSong, setSelectedSong] = useState<Track | null>(null);
+  const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+  const [lyricsError, setLyricsError] = useState<string | null>(null);
+  // Indices (not text) so duplicate lines are handled and song order is kept.
+  const [selectedLineIndices, setSelectedLineIndices] = useState<number[]>([]);
+  const lastClickedIndex = useRef<number | null>(null);
+
+  const [artworkColors, setArtworkColors] = useState<string[]>([]);
+  const [customization, setCustomization] = useState<CustomizationOptions>(DEFAULT_CUSTOMIZATION);
+
+  const searchAbort = useRef<AbortController | null>(null);
+  const lyricsAbort = useRef<AbortController | null>(null);
+
+  // --- Navigation (synced with browser history so the back button steps back) ---
+
+  const goForward = (next: AppStep) => {
+    window.history.pushState({ step: next }, '');
+    setStep(next);
+  };
+
+  const goBackTo = (target: AppStep) => {
+    if (target < step) window.history.go(target - step);
+  };
+
+  useEffect(() => {
+    window.history.replaceState({ step: AppStep.SEARCH }, '');
+  }, []);
+
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      let next: AppStep = e.state?.step ?? AppStep.SEARCH;
+      // Don't land on a step whose data is gone (e.g. after going forward again).
+      if (next >= AppStep.SELECT_LYRICS && !selectedSong) next = AppStep.SEARCH;
+      if (next === AppStep.CUSTOMIZE && selectedLineIndices.length === 0) next = AppStep.SELECT_LYRICS;
+      setStep(next);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [selectedSong, selectedLineIndices.length]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
+
+  // --- Data loading ---
 
   const handleSearch = async (searchQuery: string) => {
-    if (!searchQuery.trim()) return;
-    setIsLoading(true);
-    setError(null);
-    setQuery(searchQuery);
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    searchAbort.current?.abort();
+    const controller = new AbortController();
+    searchAbort.current = controller;
+
+    setQuery(trimmed);
+    setIsSearching(true);
+    setSearchError(null);
     try {
-      const results = await searchTracks(searchQuery);
-      setSearchResults(results);
-      setStep(AppStep.SELECT_SONG);
+      setSearchResults(await searchTracks(trimmed, controller.signal));
     } catch (err) {
-      setError('Failed to search for songs. Please try again.');
+      if (isAbort(err)) return;
       console.error(err);
+      setSearchError('Could not reach the song search. Check your connection and try again.');
     } finally {
-      setIsLoading(false);
+      if (searchAbort.current === controller) setIsSearching(false);
     }
   };
 
-  const handleSelectSong = async (song: Track) => {
-    setIsLoading(true);
-    setError(null);
-    setSelectedSong(song);
+  const loadLyrics = useCallback(async (song: Track) => {
+    lyricsAbort.current?.abort();
+    const controller = new AbortController();
+    lyricsAbort.current = controller;
+
+    setIsLoadingLyrics(true);
+    setLyricsError(null);
     setLyrics(null);
-    setSelectedLineIndices([]);
-    setStep(AppStep.SELECT_LYRICS);
     try {
-      const lyricsData = await fetchLyrics(song.artists[0].name, song.name, song.album.name);
-      if (lyricsData && lyricsData.length > 0) {
-        setLyrics(lyricsData);
-      } else {
-        setError('Lyrics not found for this song.');
-        setLyrics([]); // Set to empty array to indicate we tried but found nothing
-      }
+      const result = await fetchLyrics(song, controller.signal);
+      setLyrics(result);
     } catch (err) {
-      setError('Could not fetch lyrics. Please try another song.');
-      setLyrics([]); // Set to empty array on error
+      if (isAbort(err)) return;
       console.error(err);
+      setLyricsError('Could not load lyrics. Check your connection and try again.');
     } finally {
-      setIsLoading(false);
+      if (lyricsAbort.current === controller) setIsLoadingLyrics(false);
     }
+  }, []);
+
+  const handleSelectSong = (song: Track) => {
+    if (song.id !== selectedSong?.id) {
+      setSelectedSong(song);
+      setSelectedLineIndices([]);
+      lastClickedIndex.current = null;
+      loadLyrics(song);
+    } else if (lyricsError) {
+      loadLyrics(song);
+    }
+    goForward(AppStep.SELECT_LYRICS);
   };
-  
-  const handleLyricsSelect = (index: number) => {
-    setSelectedLineIndices(prev => {
-      // Toggle selection
-      const newIndices = prev.includes(index) 
-        ? prev.filter(i => i !== index) 
-        : [...prev, index];
-      
-      // Always sort indices to maintain chronological order from the song
-      return newIndices.sort((a, b) => a - b);
+
+  // Default the card colors to the album artwork's palette.
+  useEffect(() => {
+    if (!selectedSong?.artworkUrl) return;
+    let cancelled = false;
+    setArtworkColors([]);
+    extractColors(selectedSong.artworkUrl).then(colors => {
+      if (cancelled || colors.length === 0) return;
+      setArtworkColors(colors);
+      setCustomization(c => ({
+        ...c,
+        background: {
+          ...c.background,
+          type: 'solid',
+          color: colors[0],
+          gradientFrom: colors[0],
+          gradientTo: colors[1] ?? colors[0],
+        },
+        isTextLight: prefersLightText(colors[0]),
+      }));
     });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSong]);
+
+  // --- Lyrics selection ---
+
+  const handleLyricsSelect = (index: number, extendRange: boolean) => {
+    // Read the anchor now: the updater below runs later, after the ref is overwritten.
+    const anchor = lastClickedIndex.current;
+    setSelectedLineIndices(prev => {
+      let next: number[];
+      if (extendRange && anchor !== null && anchor !== index) {
+        const [from, to] = anchor < index ? [anchor, index] : [index, anchor];
+        const range = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+        next = [...new Set([...prev, ...range])];
+      } else {
+        next = prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index];
+      }
+      return next.sort((a, b) => a - b);
+    });
+    lastClickedIndex.current = index;
   };
 
-  const handleNextStep = () => {
-    if (step === AppStep.SELECT_LYRICS) {
-      setStep(AppStep.CUSTOMIZE);
-    }
-  };
+  const selectedLyricsLines = useMemo(
+    () => (lyrics ? selectedLineIndices.map(i => lyrics.lines[i]?.line).filter(Boolean) : []),
+    [lyrics, selectedLineIndices]
+  );
 
-  const handleBackStep = () => {
-    setError(null);
-    switch (step) {
-      case AppStep.CUSTOMIZE:
-        setStep(AppStep.SELECT_LYRICS);
-        break;
-      case AppStep.SELECT_LYRICS:
-        setStep(AppStep.SELECT_SONG);
-        setSelectedSong(null);
-        setLyrics(null);
-        setSelectedLineIndices([]);
-        break;
-      case AppStep.SELECT_SONG:
-        setStep(AppStep.SEARCH);
-        setSearchResults([]);
-        break;
-    }
-  };
-
-  // Derived state for the Customize Step
-  const selectedLyricsLines = lyrics 
-    ? selectedLineIndices.map(i => lyrics[i].line) 
-    : [];
+  // --- Render ---
 
   const renderStep = () => {
     switch (step) {
       case AppStep.SEARCH:
-        return <SearchStep onSearch={handleSearch} isLoading={isLoading} initialQuery={query} />;
-      case AppStep.SELECT_SONG:
-        return <SongSelectStep songs={searchResults} onSelect={handleSelectSong} isLoading={isLoading} />;
+        return (
+          <SearchStep
+            initialQuery={query}
+            results={searchResults}
+            isSearching={isSearching}
+            error={searchError}
+            onSearch={handleSearch}
+            onSelect={handleSelectSong}
+            selectedId={selectedSong?.id}
+          />
+        );
       case AppStep.SELECT_LYRICS:
-        return <LyricsSelectStep 
-                  song={selectedSong!} 
-                  lyrics={lyrics}
-                  selectedIndices={selectedLineIndices}
-                  onLyricSelect={handleLyricsSelect}
-                  isLoading={isLoading} 
-               />;
+        return selectedSong && (
+          <LyricsSelectStep
+            song={selectedSong}
+            lyrics={lyrics}
+            isLoading={isLoadingLyrics}
+            error={lyricsError}
+            onRetry={() => loadLyrics(selectedSong)}
+            selectedIndices={selectedLineIndices}
+            onLyricSelect={handleLyricsSelect}
+            onClear={() => setSelectedLineIndices([])}
+          />
+        );
       case AppStep.CUSTOMIZE:
-        return <CustomizeStep 
-                  song={selectedSong!} 
-                  lyrics={selectedLyricsLines} 
-                  customization={customization}
-                  setCustomization={setCustomization}
-               />;
-      default:
-        return null;
+        return selectedSong && (
+          <CustomizeStep
+            song={selectedSong}
+            lyrics={selectedLyricsLines}
+            customization={customization}
+            setCustomization={setCustomization}
+            artworkColors={artworkColors}
+          />
+        );
     }
   };
-  
-  return (
-    <div className="min-h-screen font-sans text-black dark:text-white bg-gray-100 dark:bg-brand-gray-500 transition-colors duration-300">
-      <header className="p-4 flex justify-between items-center bg-white dark:bg-brand-gray-400 shadow-md">
-        <div className="flex items-center gap-3">
-             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-green"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Lyrics Card Generator</h1>
-        </div>
-        <button onClick={toggleTheme} className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-300 transition-colors">
-          {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-        </button>
-      </header>
-      
-      <main className="p-4 md:p-8 max-w-4xl mx-auto">
-        <StepIndicator currentStep={step} />
 
-        <div className="mt-8 bg-white dark:bg-brand-gray-400 p-6 rounded-xl shadow-lg animate-fade-in">
-          {error && <div className="bg-red-500 text-white p-3 rounded-md mb-4 text-center">{error}</div>}
-          
-          {renderStep()}
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="sticky top-0 z-20 border-b border-gray-200 dark:border-brand-gray-300 bg-white/85 dark:bg-brand-gray-400/85 backdrop-blur">
+        <div className="max-w-5xl mx-auto px-4 h-16 flex justify-between items-center">
+          <a
+            href={import.meta.env.BASE_URL}
+            onClick={e => {
+              if (step === AppStep.SEARCH) return;
+              e.preventDefault();
+              goBackTo(AppStep.SEARCH);
+            }}
+            className="flex items-center gap-2.5 rounded-md"
+          >
+            <LogoIcon className="w-8 h-8 text-brand-green" />
+            <span className="text-lg md:text-xl font-bold">Lyrics Card Generator</span>
+          </a>
+          <button
+            onClick={toggleTheme}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-brand-gray-300 transition-colors"
+          >
+            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 md:py-10">
+        <StepIndicator currentStep={step} onStepClick={goBackTo} />
+
+        <div className="mt-6 md:mt-8 bg-white dark:bg-brand-gray-400 rounded-2xl shadow-sm ring-1 ring-black/5 dark:ring-white/5">
+          <div key={step} className="p-4 sm:p-6 animate-fade-in">
+            {renderStep()}
+          </div>
 
           {step > AppStep.SEARCH && (
-             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-brand-gray-300 flex justify-between items-center">
-                <button onClick={handleBackStep} className="px-6 py-2 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors disabled:opacity-50">
-                  Back
-                </button>
-              
+            <div className="sticky bottom-0 z-10 px-4 sm:px-6 py-4 flex justify-between items-center gap-3 border-t border-gray-200 dark:border-brand-gray-300 bg-white/90 dark:bg-brand-gray-400/90 backdrop-blur rounded-b-2xl">
+              <button
+                onClick={() => goBackTo(step - 1)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200 transition-colors"
+              >
+                <ArrowLeftIcon /> Back
+              </button>
+
               {step === AppStep.SELECT_LYRICS && (
-                <button onClick={handleNextStep} disabled={selectedLineIndices.length === 0} className="px-6 py-2 bg-brand-green text-white font-bold rounded-full hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                  Continue
+                <button
+                  onClick={() => goForward(AppStep.CUSTOMIZE)}
+                  disabled={selectedLineIndices.length === 0}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-white bg-brand-green-dark hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue <ArrowRightIcon />
                 </button>
               )}
             </div>
           )}
         </div>
       </main>
+
+      <footer className="py-6 text-center text-xs text-gray-500 dark:text-brand-gray-100">
+        Song data from the iTunes Search API · Lyrics from{' '}
+        <a href="https://lrclib.net" target="_blank" rel="noreferrer" className="underline hover:text-brand-green">
+          LRCLIB
+        </a>
+      </footer>
     </div>
   );
 }

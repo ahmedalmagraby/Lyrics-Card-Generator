@@ -1,5 +1,7 @@
 import React, { forwardRef } from 'react';
-import { Track, CustomizationOptions } from '../types';
+import type { CustomizationOptions, Track } from '../types';
+import { CARD_SIZE_OPTIONS, CARD_WIDTH, PLACEHOLDER_ARTWORK } from '../constants';
+import { backgroundToCss } from '../utils/color';
 
 interface LyricsCardProps {
   song: Track;
@@ -7,71 +9,76 @@ interface LyricsCardProps {
   customization: CustomizationOptions;
 }
 
-const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, customization }, ref) => {
-  const { background, isTextLight, fontFamily, fontSize, textEffect } = customization;
-  const textColor = isTextLight ? 'text-white' : 'text-black';
+// Colors on the card are plain hex/rgba inline styles on purpose: html2canvas
+// cannot parse Tailwind v4's oklch() palette colors.
 
-  const getTextEffectStyle = (): React.CSSProperties => {
-    const shadowColor = isTextLight ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.2)';
-    const outlineColor = isTextLight ? 'rgb(0 0 0 / 70%)' : 'rgb(255 255 255 / 70%)';
-    
+const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(({ song, lyrics, customization }, ref) => {
+  const { background, isTextLight, fontFamily, fontSize, textEffect, textAlign, cardSize } = customization;
+  const textColor = isTextLight ? '#ffffff' : '#000000';
+  const aspect = CARD_SIZE_OPTIONS.find(o => o.id === cardSize)?.aspect ?? null;
+
+  const textShadow = (() => {
     switch (textEffect) {
       case 'shadow':
-        return { textShadow: `2px 2px 4px ${shadowColor}` };
-      
-      case 'outline':
-        return {
-            textShadow: `
-            -1px -1px 0 ${outlineColor},
-             1px -1px 0 ${outlineColor},
-            -1px  1px 0 ${outlineColor},
-             1px  1px 0 ${outlineColor}
-            `
-        };
-        
-      case 'none':
+        return `2px 2px 4px ${isTextLight ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)'}`;
+      case 'outline': {
+        const c = isTextLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)';
+        return `-1px -1px 0 ${c}, 1px -1px 0 ${c}, -1px 1px 0 ${c}, 1px 1px 0 ${c}`;
+      }
       default:
-        return {};
+        return undefined;
     }
-  };
+  })();
 
-  const textStyle = getTextEffectStyle();
-
-  // The separator will be a soft, fading horizontal line that adapts to the text color.
-  const separatorStyle = {
+  const separatorStyle: React.CSSProperties = {
     height: '1px',
     backgroundImage: isTextLight
-      ? 'linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent)'
-      : 'linear-gradient(to right, transparent, rgba(0, 0, 0, 0.2), transparent)',
+      ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.35), transparent)'
+      : 'linear-gradient(to right, transparent, rgba(0,0,0,0.2), transparent)',
   };
 
   return (
     <div
       ref={ref}
-      className={`w-[400px] min-h-[500px] flex-shrink-0 mx-auto p-8 rounded-2xl flex flex-col transition-all duration-300 shadow-2xl ${fontFamily}`}
-      style={{ background: background }}
+      className={`p-8 rounded-2xl flex flex-col overflow-hidden ${fontFamily}`}
+      style={{
+        width: CARD_WIDTH,
+        height: aspect ? Math.round(CARD_WIDTH / aspect) : undefined,
+        minHeight: aspect ? undefined : 500,
+        background: backgroundToCss(background),
+        color: textColor,
+        textShadow,
+      }}
     >
-      {/* Header Section */}
-      <div className="flex items-center gap-5">
-        <img 
-          src={song.album.images[0]?.url || 'https://picsum.photos/100'} 
-          alt={song.album.name} 
+      <div className="flex items-center gap-5 shrink-0">
+        <img
+          src={song.artworkUrl || PLACEHOLDER_ARTWORK}
+          onError={e => {
+            e.currentTarget.src = PLACEHOLDER_ARTWORK;
+          }}
+          alt={song.album}
           crossOrigin="anonymous"
-          className="w-20 h-20 rounded-lg shadow-md flex-shrink-0 object-cover"
+          width={80}
+          height={80}
+          className="w-20 h-20 rounded-lg shrink-0 object-cover"
+          style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}
         />
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <p className={`text-2xl font-bold leading-tight break-words ${textColor}`} style={textStyle}>{song.name}</p>
-          <p className={`text-base opacity-90 leading-tight mt-1 break-words ${textColor}`} style={textStyle}>{song.artists.map(a => a.name).join(', ')}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-2xl font-bold leading-tight break-words">{song.name}</p>
+          <p className="text-base leading-tight mt-1 break-words" style={{ opacity: 0.9 }}>
+            {song.artist}
+          </p>
         </div>
       </div>
-      
-      {/* Fading Gradient Separator */}
-      <div className="w-full my-6" style={separatorStyle}></div>
 
-      {/* Lyrics Section */}
-      <div className="space-y-4 flex-grow">
+      <div className="w-full my-6 shrink-0" style={separatorStyle} />
+
+      <div
+        className={`flex-grow flex flex-col gap-4 ${aspect ? 'justify-center' : ''}`}
+        style={{ textAlign }}
+      >
         {lyrics.map((line, index) => (
-          <p key={index} className={`${fontSize} font-bold leading-snug whitespace-pre-wrap break-words ${textColor}`} style={textStyle}>
+          <p key={index} className={`${fontSize} font-bold leading-snug whitespace-pre-wrap break-words`}>
             {line}
           </p>
         ))}

@@ -1,304 +1,415 @@
-
-import React, { useRef, useState, useEffect } from 'react';
-import { Track, CustomizationOptions } from '../types';
-import { PRESET_COLORS, FONT_OPTIONS, FONT_SIZE_OPTIONS, TEXT_EFFECT_OPTIONS } from '../constants';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { Background, CustomizationOptions, Track } from '../types';
+import {
+  CARD_SIZE_OPTIONS,
+  CARD_WIDTH,
+  FONT_OPTIONS,
+  FONT_SIZE_OPTIONS,
+  GRADIENT_PRESETS,
+  PRESET_COLORS,
+  TEXT_ALIGN_OPTIONS,
+  TEXT_EFFECT_OPTIONS,
+} from '../constants';
+import { prefersLightTextFor } from '../utils/color';
+import { cardFilename } from '../utils/filename';
+import { canCopyImage, canShareFiles, downloadBlob, PREVIEW_SCALER_ATTR, renderToBlob } from '../utils/exportImage';
 import LyricsCard from './LyricsCard';
-import { DownloadIcon, PaletteIcon, TextColorIcon, FontIcon, FontSizeIcon, ShareIcon, TextEffectIcon } from './Icons';
+import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon, ShareIcon } from './Icons';
 import Spinner from './Spinner';
-
-// Fix: Add html2canvas to the Window interface to resolve TypeScript errors.
-declare global {
-  interface Window {
-    html2canvas: (element: HTMLElement, options?: any) => Promise<HTMLCanvasElement>;
-  }
-}
 
 interface CustomizeStepProps {
   song: Track;
   lyrics: string[];
   customization: CustomizationOptions;
   setCustomization: React.Dispatch<React.SetStateAction<CustomizationOptions>>;
+  artworkColors: string[];
 }
 
-const Toggle: React.FC<{ checked: boolean, onChange: (checked: boolean) => void, children: React.ReactNode }> = ({ checked, onChange, children }) => {
+type Action = 'download' | 'share' | 'copy';
+type Status = { kind: 'success' | 'error'; text: string } | null;
+
+const PREVIEW_PADDING = 32;
+
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <section>
+    <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-brand-gray-100 mb-2.5">{title}</h3>
+    {children}
+  </section>
+);
+
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { id: T; name: string; className?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
   return (
-    <label className="flex items-center cursor-pointer">
-      <div className="relative">
-        <input type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <div className={`block w-14 h-8 rounded-full transition-colors ${checked ? 'bg-brand-green' : 'bg-gray-300 dark:bg-brand-gray-200'}`}></div>
-        <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${checked ? 'transform translate-x-6' : ''}`}></div>
-      </div>
-      <div className="ml-3 text-gray-700 dark:text-gray-300 font-medium">
-        {children}
-      </div>
-    </label>
-  )
-};
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map(o => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={value === o.id}
+          onClick={() => onChange(o.id)}
+          className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+            value === o.id
+              ? 'bg-brand-green-dark text-white'
+              : 'bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200'
+          } ${o.className ?? ''}`}
+        >
+          {o.name}
+        </button>
+      ))}
+    </div>
+  );
+}
 
-const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customization, setCustomization }) => {
+const Swatch: React.FC<{ background: string; selected: boolean; label: string; onClick: () => void }> = ({
+  background,
+  selected,
+  label,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    aria-pressed={selected}
+    title={label}
+    className={`w-8 h-8 rounded-full ring-1 ring-black/10 dark:ring-white/10 transition-transform hover:scale-110 ${
+      selected ? 'outline-2 outline-offset-2 outline-brand-green' : ''
+    }`}
+    style={{ background }}
+  />
+);
+
+const ColorInput: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => (
+  <label className="flex items-center gap-2 text-sm font-medium">
+    <span className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-black/10 dark:ring-white/20 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-green">
+      <input
+        type="color"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="absolute -inset-2 w-12 h-12 cursor-pointer border-0 p-0"
+      />
+    </span>
+    {label}
+  </label>
+);
+
+const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customization, setCustomization, artworkColors }) => {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isSharing, setIsSharing] = useState(false);
-  const [canShare, setCanShare] = useState(false);
-  
-  const [backgroundType, setBackgroundType] = useState<'solid' | 'gradient'>('solid');
-  const [gradientStart, setGradientStart] = useState('#ff7e5f');
-  const [gradientEnd, setGradientEnd] = useState('#feb47b');
-  const [customSolidColor, setCustomSolidColor] = useState(() => {
-    return customization.background.startsWith('#') ? customization.background : PRESET_COLORS[0];
-  });
-  
-  const fileName = `${song.artists[0].name.toLowerCase()}-${song.name.toLowerCase()}-lyrics.png`;
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [cardHeight, setCardHeight] = useState(500);
+  const [overflowing, setOverflowing] = useState(false);
+  const [busy, setBusy] = useState<Action | null>(null);
+  const [status, setStatus] = useState<Status>(null);
+  const [canShare] = useState(canShareFiles);
+  const [canCopy] = useState(canCopyImage);
 
-  const handleGradientChange = (startColor: string, endColor: string) => {
-    const newGradient = `linear-gradient(to top right, ${startColor}, ${endColor})`;
-    setCustomization(c => ({...c, background: newGradient}));
-  };
-  
-  useEffect(() => {
-    // Check for Web Share API support
-    if (navigator.share) {
-      setCanShare(true);
-    }
+  const { background } = customization;
+  const fileName = cardFilename(song.artist, song.name);
+
+  const update = (patch: Partial<CustomizationOptions>) => setCustomization(c => ({ ...c, ...patch }));
+
+  // Changing the background also picks the more readable text color; the toggle can override it.
+  const setBackground = (patch: Partial<Background>) =>
+    setCustomization(c => {
+      const next = { ...c.background, ...patch };
+      return { ...c, background: next, isTextLight: prefersLightTextFor(next) };
+    });
+
+  // Scale the preview down to fit narrow screens. Export always renders at full size.
+  useLayoutEffect(() => {
+    const preview = previewRef.current;
+    const card = cardRef.current;
+    if (!preview || !card) return;
+    const measure = () => {
+      setScale(Math.min(1, (preview.clientWidth - PREVIEW_PADDING) / CARD_WIDTH));
+      setCardHeight(card.offsetHeight);
+      setOverflowing(card.scrollHeight > card.clientHeight + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(preview);
+    observer.observe(card);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    if (backgroundType === 'solid') {
-      setCustomization(c => ({...c, background: customSolidColor}));
-    } else {
-      handleGradientChange(gradientStart, gradientEnd);
-    }
-  }, [backgroundType]);
+    const card = cardRef.current;
+    if (card) setOverflowing(card.scrollHeight > card.clientHeight + 1);
+  }, [customization, lyrics]);
 
-  const generateCanvas = async (): Promise<HTMLCanvasElement | null> => {
-    if (!cardRef.current || !window.html2canvas) return null;
+  useEffect(() => {
+    if (!status) return;
+    const timer = setTimeout(() => setStatus(null), 3500);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  const run = async (action: Action, task: () => Promise<string | null>) => {
+    if (!cardRef.current || busy) return;
+    setBusy(action);
+    setStatus(null);
     try {
-      const canvas = await window.html2canvas(cardRef.current, {
-        scale: 3, // for higher resolution
-        backgroundColor: null,
-        useCORS: true,
+      const message = await task();
+      if (message) setStatus({ kind: 'success', text: message });
+    } catch (err) {
+      const name = (err as Error)?.name;
+      if (name === 'AbortError') return; // user closed the share sheet
+      console.error(err);
+      setStatus({
+        kind: 'error',
+        text: name === 'NotAllowedError' ? 'Your browser blocked this. Try Download instead.' : 'Could not create the image. Please try again.',
       });
-      return canvas;
-    } catch (error) {
-       console.error('Failed to generate canvas', error);
-       alert('Could not create image. Please try again.');
-       return null;
+    } finally {
+      setBusy(null);
     }
   };
 
-  const handleDownload = async () => {
-    setIsDownloading(true);
-    const canvas = await generateCanvas();
-    if (canvas) {
-      const link = document.createElement('a');
-      link.download = fileName;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    }
-    setIsDownloading(false);
-  };
+  const handleDownload = () =>
+    run('download', async () => {
+      downloadBlob(await renderToBlob(cardRef.current!), fileName);
+      return 'Image downloaded';
+    });
 
-  const handleShare = async () => {
-    if (!navigator.share) return;
-    setIsSharing(true);
-    const canvas = await generateCanvas();
+  const handleShare = () =>
+    run('share', async () => {
+      const blob = await renderToBlob(cardRef.current!);
+      await navigator.share({
+        files: [new File([blob], fileName, { type: 'image/png' })],
+        title: `${song.name} lyrics`,
+        text: `${song.name} by ${song.artist}`,
+      });
+      return null;
+    });
 
-    if (canvas) {
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsSharing(false);
-          return;
-        }
-        const file = new File([blob], fileName, { type: 'image/png' });
-        try {
-          await navigator.share({
-            files: [file],
-            title: `${song.name} Lyrics`,
-            text: `Check out these lyrics for ${song.name} by ${song.artists[0].name}!`,
-          });
-        } catch (error) {
-          if ((error as Error).name !== 'AbortError') {
-             console.error('Share failed:', error);
-          }
-        } finally {
-          setIsSharing(false);
-        }
-      }, 'image/png');
-    } else {
-       setIsSharing(false);
-    }
-  };
+  const handleCopy = () =>
+    run('copy', async () => {
+      // Pass the promise directly so Safari keeps the user-gesture context.
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': renderToBlob(cardRef.current!) })]);
+      return 'Image copied to clipboard';
+    });
 
+  const artworkGradient = artworkColors.length >= 2 ? { from: artworkColors[0], to: artworkColors[1] } : null;
+  const gradientPresets = artworkGradient ? [artworkGradient, ...GRADIENT_PRESETS] : GRADIENT_PRESETS;
+
+  const actionButton = 'w-full px-4 py-3 rounded-full font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2';
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-      {/* Controls */}
-      <div className="lg:w-1/3 space-y-6">
-        <div>
-          <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white"><PaletteIcon /> Background Style</h3>
-          
-          <div className="flex bg-gray-200 dark:bg-brand-gray-300 rounded-full p-1 mb-4">
-            <button onClick={() => setBackgroundType('solid')} className={`w-1/2 rounded-full py-1 text-sm font-semibold transition-colors ${backgroundType === 'solid' ? 'bg-white dark:bg-brand-gray-200 shadow text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
-              Solid
-            </button>
-            <button onClick={() => setBackgroundType('gradient')} className={`w-1/2 rounded-full py-1 text-sm font-semibold transition-colors ${backgroundType === 'gradient' ? 'bg-white dark:bg-brand-gray-200 shadow text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
-              Gradient
-            </button>
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-6 lg:gap-8">
+      {/* Preview (first on mobile) */}
+      <div className="lg:order-2">
+        <div className="lg:sticky lg:top-24 space-y-3">
+          <div
+            ref={previewRef}
+            className="rounded-xl bg-gray-100 dark:bg-brand-gray-500 flex justify-center overflow-hidden"
+            style={{ padding: PREVIEW_PADDING / 2 }}
+          >
+            <div style={{ width: CARD_WIDTH * scale, height: cardHeight * scale }}>
+              <div
+                {...{ [PREVIEW_SCALER_ATTR]: '' }}
+                className="rounded-2xl shadow-2xl"
+                style={{ width: CARD_WIDTH, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+              >
+                <LyricsCard ref={cardRef} song={song} lyrics={lyrics} customization={customization} />
+              </div>
+            </div>
           </div>
-          
-          {backgroundType === 'solid' ? (
-            <div className="animate-fade-in space-y-3">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Preset Colors</p>
-              <div className="flex flex-wrap gap-2">
-                {PRESET_COLORS.map(color => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      setCustomization(c => ({...c, background: color}));
-                      setCustomSolidColor(color);
-                    }}
-                    className={`w-8 h-8 rounded-full transition-transform transform hover:scale-110 ${customization.background === color ? 'ring-2 ring-offset-2 ring-brand-green dark:ring-offset-brand-gray-400' : ''}`}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Color ${color}`}
-                  />
-                ))}
-                <div className="relative w-8 h-8">
-                  <input 
-                    type="color" 
-                    value={customSolidColor}
-                    onChange={(e) => {
-                      setCustomization(c => ({...c, background: e.target.value}));
-                      setCustomSolidColor(e.target.value);
-                    }}
-                    className="w-full h-full rounded-full cursor-pointer border-2 border-dashed border-gray-300 dark:border-brand-gray-200 appearance-none bg-transparent"
-                    style={{'--color': customSolidColor} as React.CSSProperties} // for potential custom styling
-                  />
+
+          {overflowing && (
+            <p className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertIcon className="w-4 h-4 shrink-0" />
+              The lyrics don't fit this size. Try a smaller font, fewer lines, or the Classic size.
+            </p>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={handleDownload} disabled={!!busy} className={`${actionButton} bg-brand-green-dark text-white hover:bg-green-800`}>
+              {busy === 'download' ? <Spinner label="Creating image" /> : <><DownloadIcon /> Download</>}
+            </button>
+            {canShare && (
+              <button onClick={handleShare} disabled={!!busy} className={`${actionButton} bg-gray-900 text-white hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200`}>
+                {busy === 'share' ? <Spinner label="Creating image" /> : <><ShareIcon /> Share</>}
+              </button>
+            )}
+            {canCopy && (
+              <button onClick={handleCopy} disabled={!!busy} className={`${actionButton} bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200`}>
+                {busy === 'copy' ? <Spinner label="Creating image" /> : <><CopyIcon /> Copy</>}
+              </button>
+            )}
+          </div>
+
+          <div aria-live="polite" className="min-h-6 text-sm text-center">
+            {status && (
+              <span className={`inline-flex items-center gap-1.5 ${status.kind === 'success' ? 'text-brand-green-dark dark:text-brand-green' : 'text-red-600 dark:text-red-400'}`}>
+                {status.kind === 'success' ? <CheckIcon className="w-4 h-4" /> : <AlertIcon className="w-4 h-4" />}
+                {status.text}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="lg:order-1 space-y-6">
+        <Section title="Card size">
+          <div role="radiogroup" aria-label="Card size" className="grid grid-cols-4 gap-2">
+            {CARD_SIZE_OPTIONS.map(o => (
+              <button
+                key={o.id}
+                type="button"
+                role="radio"
+                aria-checked={customization.cardSize === o.id}
+                onClick={() => update({ cardSize: o.id })}
+                className={`flex flex-col items-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                  customization.cardSize === o.id
+                    ? 'bg-brand-green-dark text-white'
+                    : 'bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="block border-2 border-current rounded-sm"
+                  style={{ width: 18, height: o.aspect ? 18 / o.aspect : 22, borderStyle: o.aspect ? 'solid' : 'dashed' }}
+                />
+                {o.name}
+                <span className="font-normal opacity-75">{o.hint}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Background">
+          <div className="mb-3">
+            <Segmented
+              label="Background type"
+              options={[{ id: 'solid', name: 'Solid' }, { id: 'gradient', name: 'Gradient' }]}
+              value={background.type}
+              onChange={type => setBackground({ type })}
+            />
+          </div>
+
+          {background.type === 'solid' ? (
+            <div className="space-y-3">
+              {artworkColors.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-brand-gray-100 mb-1.5">From artwork</p>
+                  <div className="flex flex-wrap gap-2">
+                    {artworkColors.map(color => (
+                      <Swatch
+                        key={color}
+                        background={color}
+                        label={`Artwork color ${color}`}
+                        selected={background.color.toLowerCase() === color.toLowerCase()}
+                        onClick={() => setBackground({ color })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <p className="text-xs text-gray-500 dark:text-brand-gray-100 mb-1.5">Presets</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {PRESET_COLORS.map(color => (
+                    <Swatch
+                      key={color}
+                      background={color}
+                      label={`Color ${color}`}
+                      selected={background.color.toLowerCase() === color.toLowerCase()}
+                      onClick={() => setBackground({ color })}
+                    />
+                  ))}
+                  <ColorInput label="Custom" value={background.color} onChange={color => setBackground({ color })} />
                 </div>
               </div>
             </div>
           ) : (
-            <div className="animate-fade-in space-y-3">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Custom Gradient</p>
-              <div className="flex items-center justify-around gap-4 bg-gray-100 dark:bg-brand-gray-300 p-3 rounded-lg">
-                  <div className="flex flex-col items-center gap-2">
-                      <label htmlFor="gradient-start" className="text-sm">Start</label>
-                      <input
-                          id="gradient-start"
-                          type="color"
-                          value={gradientStart}
-                          onChange={(e) => {
-                              setGradientStart(e.target.value);
-                              handleGradientChange(e.target.value, gradientEnd);
-                          }}
-                          className="w-12 h-12 p-0 border-none rounded-lg cursor-pointer bg-transparent"
-                      />
-                  </div>
-                   <div className="flex flex-col items-center gap-2">
-                      <label htmlFor="gradient-end" className="text-sm">End</label>
-                      <input
-                          id="gradient-end"
-                          type="color"
-                          value={gradientEnd}
-                          onChange={(e) => {
-                              setGradientEnd(e.target.value);
-                              handleGradientChange(gradientStart, e.target.value);
-                          }}
-                          className="w-12 h-12 p-0 border-none rounded-lg cursor-pointer bg-transparent"
-                      />
-                  </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {gradientPresets.map((g, i) => (
+                  <Swatch
+                    key={`${g.from}-${g.to}-${i}`}
+                    background={`linear-gradient(45deg, ${g.from}, ${g.to})`}
+                    label={i === 0 && artworkGradient ? 'Artwork gradient' : `Gradient ${g.from} to ${g.to}`}
+                    selected={background.gradientFrom === g.from && background.gradientTo === g.to}
+                    onClick={() => setBackground({ gradientFrom: g.from, gradientTo: g.to })}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-3 rounded-lg bg-gray-50 dark:bg-brand-gray-300/60">
+                <ColorInput label="From" value={background.gradientFrom} onChange={gradientFrom => setBackground({ gradientFrom })} />
+                <ColorInput label="To" value={background.gradientTo} onChange={gradientTo => setBackground({ gradientTo })} />
+                <label className="flex items-center gap-2 text-sm font-medium flex-1 min-w-[160px]">
+                  Angle
+                  <input
+                    type="range"
+                    min={0}
+                    max={360}
+                    step={15}
+                    value={background.angle}
+                    onChange={e => setBackground({ angle: Number(e.target.value) })}
+                    className="flex-1 accent-brand-green"
+                  />
+                  <span className="w-10 text-right tabular-nums text-gray-500 dark:text-brand-gray-100">{background.angle}°</span>
+                </label>
               </div>
             </div>
           )}
-        </div>
+        </Section>
 
-        <div>
-          <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white"><FontIcon /> Font Style</h3>
-           <div className="flex items-center gap-2 flex-wrap">
-              {FONT_OPTIONS.map(font => (
-                <button
-                  key={font.className}
-                  onClick={() => setCustomization(c => ({...c, fontFamily: font.className}))}
-                  className={`px-3 py-1.5 rounded-full text-base transition-colors ${
-                    customization.fontFamily === font.className 
-                      ? 'bg-brand-green text-white' 
-                      : 'bg-gray-200 dark:bg-brand-gray-300 hover:bg-gray-300 dark:hover:bg-brand-gray-200'
-                  } ${font.className}`}
-                >
-                  {font.name}
-                </button>
-              ))}
-           </div>
-        </div>
-        
-        <div>
-          <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white"><FontSizeIcon /> Font Size</h3>
-           <div className="flex items-center gap-2 flex-wrap">
-              {FONT_SIZE_OPTIONS.map(size => (
-                <button
-                  key={size.className}
-                  onClick={() => setCustomization(c => ({...c, fontSize: size.className}))}
-                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-                    customization.fontSize === size.className 
-                      ? 'bg-brand-green text-white' 
-                      : 'bg-gray-200 dark:bg-brand-gray-300 hover:bg-gray-300 dark:hover:bg-brand-gray-200'
-                  }`}
-                >
-                  {size.name}
-                </button>
-              ))}
-           </div>
-        </div>
+        <Section title="Font">
+          <Segmented
+            label="Font"
+            options={FONT_OPTIONS.map(f => ({ id: f.className, name: f.name, className: `${f.className} !text-base !font-normal` }))}
+            value={customization.fontFamily}
+            onChange={fontFamily => update({ fontFamily })}
+          />
+        </Section>
 
-        <div>
-            <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-gray-800 dark:text-white"><TextEffectIcon /> Text Effect</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-                {TEXT_EFFECT_OPTIONS.map(effect => (
-                    <button
-                        key={effect.id}
-                        onClick={() => setCustomization(c => ({...c, textEffect: effect.id}))}
-                        className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-                        customization.textEffect === effect.id 
-                            ? 'bg-brand-green text-white' 
-                            : 'bg-gray-200 dark:bg-brand-gray-300 hover:bg-gray-300 dark:hover:bg-brand-gray-200'
-                        }`}
-                    >
-                        {effect.name}
-                    </button>
-                ))}
-            </div>
-        </div>
+        <div className="grid sm:grid-cols-2 gap-6">
+          <Section title="Text size">
+            <Segmented
+              label="Text size"
+              options={FONT_SIZE_OPTIONS.map(s => ({ id: s.className, name: s.name }))}
+              value={customization.fontSize}
+              onChange={fontSize => update({ fontSize })}
+            />
+          </Section>
 
-        <div className="space-y-4">
-          <h3 className="text-xl font-bold mb-3 text-gray-800 dark:text-white">Options</h3>
-          <Toggle checked={customization.isTextLight} onChange={isLight => setCustomization(c => ({...c, isTextLight: isLight}))}>
-             <span className="flex items-center gap-2"><TextColorIcon /> Light Text</span>
-          </Toggle>
-        </div>
-        
-        <div className="w-full mt-8 flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading || isSharing}
-            className="w-full px-6 py-3 bg-brand-green text-white font-bold rounded-full hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isDownloading ? <Spinner /> : <><DownloadIcon /> Download</>}
-          </button>
-          {canShare && (
-             <button
-                onClick={handleShare}
-                disabled={isDownloading || isSharing}
-                className="w-full px-6 py-3 bg-blue-500 text-white font-bold rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-              {isSharing ? <Spinner /> : <><ShareIcon /> Share</>}
-            </button>
-          )}
-        </div>
-      </div>
+          <Section title="Alignment">
+            <Segmented
+              label="Text alignment"
+              options={TEXT_ALIGN_OPTIONS}
+              value={customization.textAlign}
+              onChange={textAlign => update({ textAlign })}
+            />
+          </Section>
 
-      {/* Preview */}
-      <div className="lg:w-2/3 flex-grow bg-gray-100 dark:bg-brand-gray-500 rounded-lg overflow-auto flex p-4">
-        <div className="m-auto">
-          <LyricsCard ref={cardRef} song={song} lyrics={lyrics} customization={customization} />
+          <Section title="Text effect">
+            <Segmented
+              label="Text effect"
+              options={TEXT_EFFECT_OPTIONS}
+              value={customization.textEffect}
+              onChange={textEffect => update({ textEffect })}
+            />
+          </Section>
+
+          <Section title="Text color">
+            <Segmented
+              label="Text color"
+              options={[{ id: 'light', name: 'Light' }, { id: 'dark', name: 'Dark' }]}
+              value={customization.isTextLight ? 'light' : 'dark'}
+              onChange={v => update({ isTextLight: v === 'light' })}
+            />
+          </Section>
         </div>
       </div>
     </div>

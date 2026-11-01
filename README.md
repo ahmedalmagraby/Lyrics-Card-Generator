@@ -1,121 +1,84 @@
 # Lyrics Card Generator
 
-A beautiful and interactive React application that allows users to create aesthetic lyric cards for their favorite songs. Search for tracks, select specific lyrics, customize the visual style, and download or share high-quality images.
+A React app for turning your favorite song lyrics into shareable image cards. Search for a track, pick the lines you love, style the card, then download, share, or copy it as a high-resolution PNG.
 
-## 🚀 Features
+## Features
 
-* **Song Search**: Instantly search for songs by title or artist using the iTunes Search API.
-* **Lyrics Fetching**: Automatically retrieves synced lyrics using LrcLib.
-* **Interactive Selection**: Click to select the specific lines of lyrics you want to feature on your card.
-* **Deep Customization**:
-* **Backgrounds**: Choose from solid preset colors, custom colors, or create beautiful gradients.
-* **Typography**: Select from a wide variety of fonts (Serif, Sans-serif, Handwritten, etc.).
-* **Text Effects**: Apply shadows or outlines to make text pop.
-* **Theme**: Toggle between Light and Dark text modes.
+* **Song search** using the iTunes Search API, with results shown right under the search box, loading skeletons and recent searches.
+* **Lyrics** from LRCLIB. Uses synced lyrics when available, falls back to plain lyrics, and retries with a fuzzy search (stripping "feat." / "Remastered" suffixes) when the exact lookup misses.
+* **Line selection**: click to toggle, Shift-click to select a range, filter to find a line in long songs.
+* **Customization**:
+  * Card sizes: Classic (fits content), Square 1:1, Portrait 4:5, Story 9:16.
+  * Backgrounds: colors extracted from the album artwork, presets, custom colors, and gradients with an angle control.
+  * Seven fonts, three text sizes, left/center/right alignment, shadow or outline effects.
+  * Text color picked automatically for contrast (can be overridden).
+* **Export**: download a 3x PNG, share via the Web Share API (mobile), or copy the image to the clipboard.
+* **Light/dark mode** that follows your system setting until you choose one, with no flash on load.
+* **Works on phones**: the preview scales to fit, and the browser back button steps back through the flow.
+* **Accessible**: keyboard operable, visible focus, labelled controls, AA-contrast buttons, reduced-motion support.
 
+## Tech stack
 
-* **Export & Share**:
-* Download cards as high-resolution PNG files.
-* Share directly via the Web Share API (on supported mobile devices).
+* [React](https://react.dev/) 19 + [TypeScript](https://www.typescriptlang.org/) (strict)
+* [Vite](https://vitejs.dev/) 6
+* [Tailwind CSS](https://tailwindcss.com/) 4 via `@tailwindcss/vite`
+* Self-hosted fonts via [Fontsource](https://fontsource.org/)
+* [html2canvas](https://html2canvas.hertzen.com/) for image export (loaded on demand)
+* [Vitest](https://vitest.dev/) for unit tests
 
+## APIs used
 
-* **Dark/Light Mode**: Fully responsive UI that adapts to system preferences or manual toggles.
+No API keys are required.
 
-## 🛠️ Tech Stack
+1. **[iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/index.html)**: song search and metadata (`services/itunesService.ts`).
+2. **[LRCLIB](https://lrclib.net/)**: synced and plain lyrics (`services/lyricsService.ts`).
 
-* **Framework**: [React](https://react.dev/) (v19)
-* **Build Tool**: [Vite](https://vitejs.dev/)
-* **Language**: [TypeScript](https://www.typescriptlang.org/)
-* **Styling**: [Tailwind CSS](https://tailwindcss.com/) (via CDN)
-* **Image Generation**: [html2canvas](https://html2canvas.hertzen.com/)
-* **Icons**: SVG Icons (Custom components)
+## Getting started
 
-## 📡 APIs Used
+Requires [Node.js](https://nodejs.org/) 20 or newer.
 
-This project relies on free, public APIs and does not require private API keys for core functionality:
-
-1. **[iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/index.html)**: Used for searching songs and retrieving metadata (Album Art, Artist Name, Track Name).
-* *Note: Although the file is named `spotifyService.ts`, the implementation uses Apple's iTunes API.*
-
-
-2. **[LrcLib](https://lrclib.net/)**: An open API used to fetch synchronized lyrics.
-
-## 🏃‍♂️ Getting Started
-
-### Prerequisites
-
-* [Node.js](https://nodejs.org/) (Version 18 or 20+ recommended)
-* npm (comes with Node.js)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/lyrics-card-generator.git
-cd lyrics-card-generator
-
-```
-
-
-2. Install dependencies:
 ```bash
 npm install
-
-```
-
-
-3. Start the development server:
-```bash
 npm run dev
-
 ```
 
+Then open http://localhost:3000/Lyrics-Card-Generator/.
 
-4. Open your browser and navigate to `http://localhost:3000` (or the port shown in your terminal).
+### Scripts
 
-## 📖 Usage Guide
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build into `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run typecheck` | Type-check with `tsc` |
+| `npm test` | Run unit tests |
 
-1. **Search**: Enter a song title or artist name in the search bar.
-2. **Select Song**: Choose the correct track from the search results.
-3. **Select Lyrics**: The app will fetch lyrics. Click on the lines you want to include in your card.
-4. **Customize**:
-* Change the background color or set a gradient.
-* Pick a font style and size.
-* Adjust text effects (Shadow/Outline).
+## Deployment
 
+`.github/workflows/deploy.yml` type-checks, tests and builds every push and pull request, and deploys `main` to **GitHub Pages**. In the repository go to **Settings → Pages** and set the source to **GitHub Actions**.
 
-5. **Download/Share**: Click "Download" to save the image to your device, or "Share" to send it to other apps (mobile only).
+The app is served from `/Lyrics-Card-Generator/` (see `base` in `vite.config.ts`). Change it if your repository has a different name.
 
-## 📦 Deployment
-
-This repository includes a GitHub Actions workflow (`.github/workflows/deploy.yml`) configured to deploy the application to **GitHub Pages**.
-
-To deploy:
-
-1. Push your code to the `main` branch.
-2. Go to your repository **Settings** > **Pages**.
-3. Under **Build and deployment**, ensure "GitHub Actions" is selected as the source.
-4. The workflow will automatically build and deploy the app.
-
-## 📂 Project Structure
+## Project structure
 
 ```
-├── .github/workflows/   # CI/CD configuration
-├── components/          # React components
-│   ├── CustomizeStep.tsx
-│   ├── LyricsCard.tsx   # The actual card being rendered/captured
-│   ├── SearchStep.tsx
+├── .github/workflows/     # CI + GitHub Pages deploy
+├── components/
+│   ├── SearchStep.tsx     # Search box + results grid
+│   ├── LyricsSelectStep.tsx
+│   ├── CustomizeStep.tsx  # Controls, scaled preview, export actions
+│   ├── LyricsCard.tsx     # The card that gets rendered to PNG
 │   └── ...
-├── services/            # API services
-│   ├── lyricsService.ts # LrcLib integration
-│   └── spotifyService.ts# iTunes API integration
-├── types.ts             # TypeScript interfaces
-├── constants.ts         # Configuration for colors, fonts, etc.
-├── App.tsx              # Main application logic
-└── vite.config.ts       # Vite configuration
-
+├── services/              # iTunes and LRCLIB clients (with caching)
+├── utils/                 # Color math, artwork palette, filename, export helpers
+├── public/                # Favicon and placeholder artwork
+├── App.tsx                # Flow, state and navigation
+├── constants.ts           # Colors, fonts, card sizes
+├── types.ts
+└── index.css              # Tailwind theme, fonts, base styles
 ```
 
-## 📄 License
+## License
 
 [MIT](https://opensource.org/licenses/MIT)
