@@ -1,8 +1,11 @@
 import React, { useRef, useState } from 'react';
-import type { Track } from '../types';
+import type { SavedCard, Track } from '../types';
 import { PLACEHOLDER_ARTWORK } from '../constants';
+import type { AudioPreview } from '../hooks/useAudioPreview';
 import { AlertIcon, HistoryIcon, SearchIcon, XIcon } from './Icons';
 import Spinner from './Spinner';
+import PreviewButton from './PreviewButton';
+import SavedCardsGallery from './SavedCardsGallery';
 
 interface SearchStepProps {
   initialQuery: string;
@@ -12,6 +15,11 @@ interface SearchStepProps {
   onSearch: (query: string) => void;
   onSelect: (song: Track) => void;
   selectedId?: string;
+  audio: AudioPreview;
+  savedCards: SavedCard[];
+  openingCardId: string | null;
+  onOpenSaved: (card: SavedCard) => void;
+  onDeleteSaved: (id: string) => void;
 }
 
 const RECENTS_KEY = 'recentSearches';
@@ -40,6 +48,11 @@ const SearchStep: React.FC<SearchStepProps> = ({
   onSearch,
   onSelect,
   selectedId,
+  audio,
+  savedCards,
+  openingCardId,
+  onOpenSaved,
+  onDeleteSaved,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [recents, setRecents] = useState(loadRecents);
@@ -162,7 +175,18 @@ const SearchStep: React.FC<SearchStepProps> = ({
             aria-label="Search results"
           >
             {results.map(song => (
-              <li key={song.id}>
+              <li key={song.id} className="relative group/item">
+                <PreviewButton
+                  url={song.previewUrl}
+                  title={song.name}
+                  audio={audio}
+                  size="sm"
+                  className={`absolute top-4 right-4 z-10 transition-opacity ${
+                    audio.playingUrl === song.previewUrl
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100'
+                  }`}
+                />
                 <button
                   onClick={() => onSelect(song)}
                   className={`w-full text-left group p-2 rounded-xl transition-colors hover:bg-gray-100 dark:hover:bg-brand-gray-300 ${
@@ -195,6 +219,8 @@ const SearchStep: React.FC<SearchStepProps> = ({
           </ul>
         )}
       </div>
+
+      <SavedCardsGallery cards={savedCards} openingId={openingCardId} onOpen={onOpenSaved} onDelete={onDeleteSaved} />
     </div>
   );
 };

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppStep, CustomizationOptions, LyricsResult, Track } from './types';
+import { AppStep, CardLine, CardText, CustomizationOptions, LyricsResult, SavedCard, Track } from './types';
 import { searchTracks } from './services/itunesService';
 import { fetchLyrics } from './services/lyricsService';
+import { loadSavedCards, newCardId, persistCards, upsertCard } from './services/galleryStore';
 import { FONT_OPTIONS, FONT_SIZE_OPTIONS, GRADIENT_PRESETS, PRESET_COLORS } from './constants';
-import { prefersLightText } from './utils/color';
+import { prefersLightText, vividColor } from './utils/color';
 import { extractColors } from './utils/extractColors';
+import { useAudioPreview } from './hooks/useAudioPreview';
 import StepIndicator from './components/StepIndicator';
 import SearchStep from './components/SearchStep';
 import LyricsSelectStep from './components/LyricsSelectStep';
@@ -18,6 +20,8 @@ const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
     gradientFrom: GRADIENT_PRESETS[0].from,
     gradientTo: GRADIENT_PRESETS[0].to,
     angle: 45,
+    blur: 28,
+    dim: 0.45,
   },
   isTextLight: true,
   fontFamily: FONT_OPTIONS[0].className,
@@ -25,7 +29,18 @@ const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
   textEffect: 'none',
   textAlign: 'left',
   cardSize: 'classic',
+  accentColor: PRESET_COLORS[0],
+  highlightStyle: 'color',
 };
+
+const EMPTY_CARD_TEXT: CardText = { edits: {}, highlights: {}, caption: '' };
+
+/** Fills in options added after a card was saved. */
+const withDefaults = (c: CustomizationOptions): CustomizationOptions => ({
+  ...DEFAULT_CUSTOMIZATION,
+  ...c,
+  background: { ...DEFAULT_CUSTOMIZATION.background, ...c.background },
+});
 
 const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
 
@@ -81,6 +96,17 @@ export default function App() {
 
   const [artworkColors, setArtworkColors] = useState<string[]>([]);
   const [customization, setCustomization] = useState<CustomizationOptions>(DEFAULT_CUSTOMIZATION);
+  const [cardText, setCardText] = useState<CardText>(EMPTY_CARD_TEXT);
+  // Saving again updates the same gallery entry until another song is picked.
+  const [cardId, setCardId] = useState(newCardId);
+  // A reopened card keeps its own colors instead of the artwork defaults.
+  const keepCustomization = useRef(false);
+
+  const [savedCards, setSavedCards] = useState<SavedCard[]>(loadSavedCards);
+  const [openingCardId, setOpeningCardId] = useState<string | null>(null);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+
+  const audio = useAudioPreview();
 
   const searchAbort = useRef<AbortController | null>(null);
   const lyricsAbort = useRef<AbortController | null>(null);
@@ -160,9 +186,12 @@ export default function App() {
   }, []);
 
   const handleSelectSong = (song: Track) => {
+    if (audio.playingUrl && audio.playingUrl !== song.previewUrl) audio.stop();
     if (song.id !== selectedSong?.id) {
       setSelectedSong(song);
       setSelectedLineIndices([]);
+      setCardText(EMPTY_CARD_TEXT);
+      setCardId(newCardId());
       lastClickedIndex.current = null;
       loadLyrics(song);
     } else if (lyricsError) {
@@ -174,11 +203,14 @@ export default function App() {
   // Default the card colors to the album artwork's palette.
   useEffect(() => {
     if (!selectedSong?.artworkUrl) return;
+    const keep = keepCustomization.current;
+    keepCustomization.current = false;
     let cancelled = false;
     setArtworkColors([]);
     extractColors(selectedSong.artworkUrl).then(colors => {
       if (cancelled || colors.length === 0) return;
       setArtworkColors(colors);
+      if (keep) return;
       setCustomization(c => ({
         ...c,
         background: {
@@ -189,6 +221,7 @@ export default function App() {
           gradientTo: colors[1] ?? colors[0],
         },
         isTextLight: prefersLightText(colors[0]),
+        accentColor: vividColor(colors.slice(1), '#1DB954'),
       }));
     });
     return () => {
@@ -215,10 +248,74 @@ export default function App() {
     lastClickedIndex.current = index;
   };
 
-  const selectedLyricsLines = useMemo(
-    () => (lyrics ? selectedLineIndices.map(i => lyrics.lines[i]?.line).filter(Boolean) : []),
-    [lyrics, selectedLineIndices]
+  const originals = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const i of selectedLineIndices) if (lyrics?.lines[i]) map[i] = lyrics.lines[i].line;
+    return map;
+  }, [lyrics, selectedLineIndices]);
+
+  const cardLines = useMemo<CardLine[]>(
+    () =>
+      selectedLineIndices
+        .filter(i => i in originals)
+        .map(i => ({ id: i, text: cardText.edits[i] ?? originals[i], highlights: cardText.highlights[i] ?? [] })),
+    [selectedLineIndices, originals, cardText]
   );
+
+  // --- Saved cards ---
+
+  const handleSaveCard = (thumbnail: string) => {
+    if (!selectedSong) return;
+    const card: SavedCard = {
+      id: cardId,
+      savedAt: Date.now(),
+      song: selectedSong,
+      lineIndices: selectedLineIndices,
+      lineTexts: selectedLineIndices.map(i => originals[i] ?? ''),
+      cardText,
+      customization,
+      thumbnail,
+    };
+    setSavedCards(cards => persistCards(upsertCard(cards, card)));
+  };
+
+  const handleDeleteCard = (id: string) => setSavedCards(cards => persistCards(cards.filter(c => c.id !== id)));
+
+  const handleOpenCard = async (card: SavedCard) => {
+    if (openingCardId) return;
+    setOpeningCardId(card.id);
+    setGalleryError(null);
+    audio.stop();
+    try {
+      const result = await fetchLyrics(card.song);
+      // If the lyrics source changed since saving, keep the saved wording as edits.
+      const edits = { ...card.cardText.edits };
+      card.lineIndices.forEach((index, n) => {
+        if (!(index in edits) && result.lines[index]?.line !== card.lineTexts[n]) edits[index] = card.lineTexts[n];
+      });
+      const indices = card.lineIndices.filter(i => i < result.lines.length);
+      if (indices.length === 0) throw new Error('Saved lines no longer exist');
+
+      lyricsAbort.current?.abort();
+      keepCustomization.current = true;
+      setSelectedSong({ ...card.song }); // new object so the artwork-color effect always runs (and clears the flag)
+      setLyrics(result);
+      setLyricsError(null);
+      setIsLoadingLyrics(false);
+      setSelectedLineIndices(indices);
+      setCardText({ ...card.cardText, edits });
+      setCustomization(withDefaults(card.customization));
+      setCardId(card.id);
+      lastClickedIndex.current = null;
+      window.history.pushState({ step: AppStep.SELECT_LYRICS }, '');
+      goForward(AppStep.CUSTOMIZE);
+    } catch (err) {
+      console.error(err);
+      setGalleryError('Could not reopen that card. Check your connection and try again.');
+    } finally {
+      setOpeningCardId(null);
+    }
+  };
 
   // --- Render ---
 
@@ -226,20 +323,33 @@ export default function App() {
     switch (step) {
       case AppStep.SEARCH:
         return (
-          <SearchStep
-            initialQuery={query}
-            results={searchResults}
-            isSearching={isSearching}
-            error={searchError}
-            onSearch={handleSearch}
-            onSelect={handleSelectSong}
-            selectedId={selectedSong?.id}
-          />
+          <>
+            <SearchStep
+              initialQuery={query}
+              results={searchResults}
+              isSearching={isSearching}
+              error={searchError}
+              onSearch={handleSearch}
+              onSelect={handleSelectSong}
+              selectedId={selectedSong?.id}
+              audio={audio}
+              savedCards={savedCards}
+              openingCardId={openingCardId}
+              onOpenSaved={handleOpenCard}
+              onDeleteSaved={handleDeleteCard}
+            />
+            {galleryError && (
+              <p role="alert" className="mt-3 text-sm text-center text-red-600 dark:text-red-400">
+                {galleryError}
+              </p>
+            )}
+          </>
         );
       case AppStep.SELECT_LYRICS:
         return selectedSong && (
           <LyricsSelectStep
             song={selectedSong}
+            audio={audio}
             lyrics={lyrics}
             isLoading={isLoadingLyrics}
             error={lyricsError}
@@ -253,10 +363,14 @@ export default function App() {
         return selectedSong && (
           <CustomizeStep
             song={selectedSong}
-            lyrics={selectedLyricsLines}
+            lines={cardLines}
+            originals={originals}
+            cardText={cardText}
+            setCardText={setCardText}
             customization={customization}
             setCustomization={setCustomization}
             artworkColors={artworkColors}
+            onSave={handleSaveCard}
           />
         );
     }

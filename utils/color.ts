@@ -37,11 +37,48 @@ export function mixHex(a: string, b: string): string {
 }
 
 export function backgroundToCss(bg: Background): string {
-  return bg.type === 'solid'
-    ? bg.color
-    : `linear-gradient(${bg.angle}deg, ${bg.gradientFrom}, ${bg.gradientTo})`;
+  // Image backgrounds use the solid color as a base while the image loads.
+  return bg.type === 'gradient'
+    ? `linear-gradient(${bg.angle}deg, ${bg.gradientFrom}, ${bg.gradientTo})`
+    : bg.color;
 }
 
 export function prefersLightTextFor(bg: Background): boolean {
-  return prefersLightText(bg.type === 'solid' ? bg.color : mixHex(bg.gradientFrom, bg.gradientTo));
+  switch (bg.type) {
+    case 'solid':
+      return prefersLightText(bg.color);
+    case 'gradient':
+      return prefersLightText(mixHex(bg.gradientFrom, bg.gradientTo));
+    default:
+      // Photos are unpredictable; light text with a dim overlay reads best on most of them.
+      return true;
+  }
+}
+
+/** HSV saturation (0-1). */
+export function saturationOf(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  const max = Math.max(r, g, b);
+  return max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
+}
+
+/** Raises a dark color's brightness (HSV value) to `minValue`, keeping its hue, and softens it slightly. */
+export function brighten(hex: string, minValue = 0.85): string {
+  const rgb = hexToRgb(hex);
+  const max = Math.max(...rgb);
+  if (max / 255 >= minValue) return hex;
+  const factor = (255 * 0.96) / Math.max(max, 1);
+  const scaled = rgb.map(v => Math.min(255, v * factor));
+  return rgbToHex(scaled.map(v => v + (255 - v) * 0.2) as RGB);
+}
+
+/**
+ * The most vivid artwork color, for accents. Dark colors are brightened so highlights stay
+ * readable; returns `fallback` when the artwork has no real color (greys, black and white).
+ */
+export function vividColor(colors: string[], fallback: string): string {
+  const value = (c: string) => Math.max(...hexToRgb(c)) / 255;
+  const candidates = colors.filter(c => value(c) > 0.2 && saturationOf(c) > 0.35);
+  const best = candidates.sort((a, b) => saturationOf(b) * (0.5 + value(b) / 2) - saturationOf(a) * (0.5 + value(a) / 2))[0];
+  return best ? brighten(best) : fallback;
 }

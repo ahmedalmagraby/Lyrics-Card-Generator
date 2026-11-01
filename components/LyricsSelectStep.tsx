@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import type { LyricsResult, Track } from '../types';
 import { PLACEHOLDER_ARTWORK, RECOMMENDED_MAX_LINES } from '../constants';
+import type { AudioPreview } from '../hooks/useAudioPreview';
 import { AlertIcon, CheckIcon, SearchIcon } from './Icons';
 import Spinner from './Spinner';
+import PreviewButton from './PreviewButton';
 
 interface LyricsSelectStepProps {
   song: Track;
+  audio: AudioPreview;
   lyrics: LyricsResult | null;
   isLoading: boolean;
   error: string | null;
@@ -17,6 +20,7 @@ interface LyricsSelectStepProps {
 
 const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({
   song,
+  audio,
   lyrics,
   isLoading,
   error,
@@ -46,10 +50,11 @@ const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({
           height={64}
           className="w-16 h-16 rounded-lg object-cover shadow shrink-0"
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-xl sm:text-2xl font-bold truncate">{song.name}</h2>
           <p className="text-gray-600 dark:text-brand-gray-100 truncate">{song.artist}</p>
         </div>
+        <PreviewButton url={song.previewUrl} title={song.name} audio={audio} />
       </div>
 
       <div aria-live="polite">

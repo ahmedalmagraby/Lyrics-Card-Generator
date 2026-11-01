@@ -17,6 +17,42 @@ export async function renderToBlob(node: HTMLElement): Promise<Blob> {
   });
 }
 
+/** Small preview for the saved-cards gallery (WebP keeps the rounded corners transparent). */
+export async function renderThumbnail(node: HTMLElement): Promise<string> {
+  const [{ domToWebp }] = await Promise.all([import('modern-screenshot'), document.fonts.ready]);
+  return domToWebp(node, {
+    width: node.offsetWidth,
+    height: node.offsetHeight,
+    scale: 0.5,
+    quality: 0.8,
+    backgroundColor: null,
+  });
+}
+
+/** Reads an image file, downscaled so it fits in `maxSize` px, as a JPEG data URL. */
+export function imageFileToDataUrl(file: File, maxSize: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ratio = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * ratio);
+      canvas.height = Math.round(img.naturalHeight * ratio);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas unavailable'));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read that image'));
+    };
+    img.src = url;
+  });
+}
+
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

@@ -5,14 +5,18 @@ A React app for turning your favorite song lyrics into shareable image cards. Se
 ## Features
 
 * **Song search** using the iTunes Search API, with results shown right under the search box, loading skeletons and recent searches.
+* **Audio previews**: play a song's 30-second preview from the results or while picking lyrics.
 * **Lyrics** from LRCLIB. Uses synced lyrics when available, falls back to plain lyrics, and retries with a fuzzy search (stripping "feat." / "Remastered" suffixes) when the exact lookup misses.
 * **Line selection**: click to toggle, Shift-click to select a range, filter to find a line in long songs.
 * **Customization**:
+  * One-tap templates (Artwork Blur, Spotlight, Minimal, Neon, Sunset, Night Story, Notebook) and a Surprise me shuffle.
   * Card sizes: Classic (fits content), Square 1:1, Portrait 4:5, Story 9:16.
-  * Backgrounds: colors extracted from the album artwork, presets, custom colors, and gradients with an angle control.
-  * Seven fonts, three text sizes, left/center/right alignment, shadow or outline effects.
+  * Backgrounds: colors extracted from the album artwork, presets, custom colors, gradients, the blurred album cover, or your own photo (with blur and dim controls).
+  * Seven fonts, three text sizes, left/center/right alignment, shadow, outline or glow effects.
+  * Tap words on the card to highlight them (colored text or marker), edit lines, and add a caption.
   * Text color picked automatically for contrast (can be overridden).
-* **Export**: download a 3x PNG, share via the Web Share API (mobile), or copy the image to the clipboard.
+* **Export**: download a 3x PNG, share via the Web Share API (mobile), or copy the image to the clipboard. The export matches the preview exactly.
+* **Your cards**: saved or exported cards are kept in the browser, so you can reopen and tweak them later.
 * **Light/dark mode** that follows your system setting until you choose one, with no flash on load.
 * **Works on phones**: the preview scales to fit, and the browser back button steps back through the flow.
 * **Accessible**: keyboard operable, visible focus, labelled controls, AA-contrast buttons, reduced-motion support.

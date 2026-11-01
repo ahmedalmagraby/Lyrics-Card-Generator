@@ -103,6 +103,37 @@ export const AlertIcon: React.FC<IconProps> = ({ className }) => (
   </Icon>
 );
 
+export const ShuffleIcon: React.FC<IconProps> = ({ className }) => (
+  <Icon className={className}>
+    <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+  </Icon>
+);
+
+export const PlayIcon: React.FC<IconProps> = ({ className }) => (
+  <svg className={className ?? 'w-5 h-5'} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.8-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" />
+  </svg>
+);
+
+export const PauseIcon: React.FC<IconProps> = ({ className }) => (
+  <svg className={className ?? 'w-5 h-5'} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <rect x="6" y="4.5" width="4" height="15" rx="1.2" />
+    <rect x="14" y="4.5" width="4" height="15" rx="1.2" />
+  </svg>
+);
+
+export const BookmarkIcon: React.FC<IconProps> = ({ className }) => (
+  <Icon className={className}>
+    <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </Icon>
+);
+
+export const TrashIcon: React.FC<IconProps> = ({ className }) => (
+  <Icon className={className}>
+    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+  </Icon>
+);
+
 export const HistoryIcon: React.FC<IconProps> = ({ className }) => (
   <Icon className={className}>
     <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />

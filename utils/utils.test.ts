@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backgroundToCss, hexToRgb, prefersLightText, prefersLightTextFor, relativeLuminance } from './color';
+import { backgroundToCss, hexToRgb, prefersLightText, prefersLightTextFor, relativeLuminance, vividColor } from './color';
 import { dominantColors } from './extractColors';
 import { cardFilename } from './filename';
 import { mapResults } from '../services/itunesService';
@@ -23,10 +23,26 @@ describe('color', () => {
   });
 
   it('builds CSS for backgrounds', () => {
-    const bg = { type: 'gradient' as const, color: '#000', gradientFrom: '#111111', gradientTo: '#222222', angle: 90 };
+    const bg = { type: 'gradient' as const, color: '#000', gradientFrom: '#111111', gradientTo: '#222222', angle: 90, blur: 0, dim: 0 };
     expect(backgroundToCss(bg)).toBe('linear-gradient(90deg, #111111, #222222)');
     expect(backgroundToCss({ ...bg, type: 'solid' })).toBe('#000');
+    expect(backgroundToCss({ ...bg, type: 'artwork' })).toBe('#000');
     expect(prefersLightTextFor(bg)).toBe(true);
+    expect(prefersLightTextFor({ ...bg, type: 'photo', color: '#ffffff' })).toBe(true);
+  });
+
+  it('picks a vivid accent', () => {
+    expect(vividColor(['#202020', '#EF0078', '#888888'], '#000000')).toBe('#EF0078');
+    expect(vividColor(['#202020', '#777777'], '#1DB954')).toBe('#1DB954');
+    expect(vividColor([], '#1DB954')).toBe('#1DB954');
+  });
+
+  it('brightens dark accents but keeps their hue', () => {
+    const accent = vividColor(['#760613'], '#1DB954'); // dark red from album art
+    const [r, g, b] = hexToRgb(accent);
+    expect(Math.max(r, g, b)).toBeGreaterThan(220);
+    expect(r).toBeGreaterThan(g + 100); // still red
+    expect(r).toBeGreaterThan(b + 100);
   });
 });
 

@@ -1,121 +1,55 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Background, CustomizationOptions, Track } from '../types';
+import type { Background, CardLine, CardText, CustomizationOptions, Track } from '../types';
 import {
   CARD_SIZE_OPTIONS,
   CARD_WIDTH,
   FONT_OPTIONS,
   FONT_SIZE_OPTIONS,
-  GRADIENT_PRESETS,
-  PRESET_COLORS,
   TEXT_ALIGN_OPTIONS,
   TEXT_EFFECT_OPTIONS,
 } from '../constants';
 import { prefersLightTextFor } from '../utils/color';
-import { cardFilename } from '../utils/filename';
-import { canCopyImage, canShareFiles, downloadBlob, renderToBlob } from '../utils/exportImage';
+import { toggleIndex } from '../utils/words';
 import LyricsCard from './LyricsCard';
-import { AlertIcon, CheckIcon, CopyIcon, DownloadIcon, ShareIcon } from './Icons';
-import Spinner from './Spinner';
+import { AlertIcon } from './Icons';
+import { Section, Segmented } from './customize/controls';
+import BackgroundControls from './customize/BackgroundControls';
+import TextControls from './customize/TextControls';
+import TemplatePicker from './customize/TemplatePicker';
+import ExportActions from './customize/ExportActions';
 
 interface CustomizeStepProps {
   song: Track;
-  lyrics: string[];
+  lines: CardLine[];
+  /** Original lyric text per line id, to detect and reset edits. */
+  originals: Record<number, string>;
+  cardText: CardText;
+  setCardText: React.Dispatch<React.SetStateAction<CardText>>;
   customization: CustomizationOptions;
   setCustomization: React.Dispatch<React.SetStateAction<CustomizationOptions>>;
   artworkColors: string[];
+  onSave: (thumbnail: string) => void;
 }
-
-type Action = 'download' | 'share' | 'copy';
-type Status = { kind: 'success' | 'error'; text: string } | null;
 
 const PREVIEW_PADDING = 32;
 
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section>
-    <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-brand-gray-100 mb-2.5">{title}</h3>
-    {children}
-  </section>
-);
-
-function Segmented<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly { id: T; name: string; className?: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
-      {options.map(o => (
-        <button
-          key={o.id}
-          type="button"
-          role="radio"
-          aria-checked={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-            value === o.id
-              ? 'bg-brand-green-dark text-white'
-              : 'bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200'
-          } ${o.className ?? ''}`}
-        >
-          {o.name}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const Swatch: React.FC<{ background: string; selected: boolean; label: string; onClick: () => void }> = ({
-  background,
-  selected,
-  label,
-  onClick,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label={label}
-    aria-pressed={selected}
-    title={label}
-    className={`w-8 h-8 rounded-full ring-1 ring-black/10 dark:ring-white/10 transition-transform hover:scale-110 ${
-      selected ? 'outline-2 outline-offset-2 outline-brand-green' : ''
-    }`}
-    style={{ background }}
-  />
-);
-
-const ColorInput: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => (
-  <label className="flex items-center gap-2 text-sm font-medium">
-    <span className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-black/10 dark:ring-white/20 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-green">
-      <input
-        type="color"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="absolute -inset-2 w-12 h-12 cursor-pointer border-0 p-0"
-      />
-    </span>
-    {label}
-  </label>
-);
-
-const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customization, setCustomization, artworkColors }) => {
+const CustomizeStep: React.FC<CustomizeStepProps> = ({
+  song,
+  lines,
+  originals,
+  cardText,
+  setCardText,
+  customization,
+  setCustomization,
+  artworkColors,
+  onSave,
+}) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [cardHeight, setCardHeight] = useState(500);
   const [overflowing, setOverflowing] = useState(false);
-  const [busy, setBusy] = useState<Action | null>(null);
-  const [status, setStatus] = useState<Status>(null);
-  const [canShare] = useState(canShareFiles);
-  const [canCopy] = useState(canCopyImage);
-
-  const { background } = customization;
-  const fileName = cardFilename(song.artist, song.name);
+  const [highlightMode, setHighlightMode] = useState(false);
 
   const update = (patch: Partial<CustomizationOptions>) => setCustomization(c => ({ ...c, ...patch }));
 
@@ -124,6 +58,20 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
     setCustomization(c => {
       const next = { ...c.background, ...patch };
       return { ...c, background: next, isTextLight: prefersLightTextFor(next) };
+    });
+
+  const toggleWord = (lineId: number, word: number) =>
+    setCardText(t => ({ ...t, highlights: { ...t.highlights, [lineId]: toggleIndex(t.highlights[lineId], word) } }));
+
+  const editLine = (lineId: number, text: string) =>
+    setCardText(t => {
+      const edits = { ...t.edits };
+      if (text === originals[lineId]) delete edits[lineId];
+      else edits[lineId] = text;
+      // Word positions change when the text changes, so drop this line's highlights.
+      const highlights = { ...t.highlights };
+      delete highlights[lineId];
+      return { ...t, edits, highlights };
     });
 
   // Scale the preview down to fit narrow screens. Export always renders at full size.
@@ -146,62 +94,7 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
   useEffect(() => {
     const card = cardRef.current;
     if (card) setOverflowing(card.scrollHeight > card.clientHeight + 1);
-  }, [customization, lyrics]);
-
-  useEffect(() => {
-    if (!status) return;
-    const timer = setTimeout(() => setStatus(null), 3500);
-    return () => clearTimeout(timer);
-  }, [status]);
-
-  const run = async (action: Action, task: () => Promise<string | null>) => {
-    if (!cardRef.current || busy) return;
-    setBusy(action);
-    setStatus(null);
-    try {
-      const message = await task();
-      if (message) setStatus({ kind: 'success', text: message });
-    } catch (err) {
-      const name = (err as Error)?.name;
-      if (name === 'AbortError') return; // user closed the share sheet
-      console.error(err);
-      setStatus({
-        kind: 'error',
-        text: name === 'NotAllowedError' ? 'Your browser blocked this. Try Download instead.' : 'Could not create the image. Please try again.',
-      });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleDownload = () =>
-    run('download', async () => {
-      downloadBlob(await renderToBlob(cardRef.current!), fileName);
-      return 'Image downloaded';
-    });
-
-  const handleShare = () =>
-    run('share', async () => {
-      const blob = await renderToBlob(cardRef.current!);
-      await navigator.share({
-        files: [new File([blob], fileName, { type: 'image/png' })],
-        title: `${song.name} lyrics`,
-        text: `${song.name} by ${song.artist}`,
-      });
-      return null;
-    });
-
-  const handleCopy = () =>
-    run('copy', async () => {
-      // Pass the promise directly so Safari keeps the user-gesture context.
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': renderToBlob(cardRef.current!) })]);
-      return 'Image copied to clipboard';
-    });
-
-  const artworkGradient = artworkColors.length >= 2 ? { from: artworkColors[0], to: artworkColors[1] } : null;
-  const gradientPresets = artworkGradient ? [artworkGradient, ...GRADIENT_PRESETS] : GRADIENT_PRESETS;
-
-  const actionButton = 'w-full px-4 py-3 rounded-full font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2';
+  }, [customization, lines, cardText.caption]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-6 lg:gap-8">
@@ -210,7 +103,9 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
         <div className="lg:sticky lg:top-24 space-y-3">
           <div
             ref={previewRef}
-            className="rounded-xl bg-gray-100 dark:bg-brand-gray-500 flex justify-center overflow-hidden"
+            className={`relative rounded-xl bg-gray-100 dark:bg-brand-gray-500 flex justify-center overflow-hidden transition-shadow ${
+              highlightMode ? 'ring-2 ring-brand-green' : ''
+            }`}
             style={{ padding: PREVIEW_PADDING / 2 }}
           >
             <div style={{ width: CARD_WIDTH * scale, height: cardHeight * scale }}>
@@ -218,10 +113,34 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
                 className="rounded-2xl shadow-2xl"
                 style={{ width: CARD_WIDTH, transform: `scale(${scale})`, transformOrigin: 'top left' }}
               >
-                <LyricsCard ref={cardRef} song={song} lyrics={lyrics} customization={customization} />
+                <LyricsCard
+                  ref={cardRef}
+                  song={song}
+                  lines={lines}
+                  caption={cardText.caption}
+                  customization={customization}
+                  onWordClick={highlightMode ? toggleWord : undefined}
+                />
               </div>
             </div>
           </div>
+
+          {highlightMode ? (
+            <div className="flex items-center justify-between gap-3 text-sm rounded-lg px-3 py-2 bg-green-50 text-green-900 dark:bg-green-950/40 dark:text-green-200">
+              <span>Tap words on the card to highlight them.</span>
+              <button type="button" onClick={() => setHighlightMode(false)} className="font-semibold hover:underline">
+                Done
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setHighlightMode(true)}
+              className="w-full text-sm font-semibold text-brand-green-dark dark:text-brand-green hover:underline"
+            >
+              Highlight words on the card
+            </button>
+          )}
 
           {overflowing && (
             <p className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -230,35 +149,14 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
             </p>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={handleDownload} disabled={!!busy} className={`${actionButton} bg-brand-green-dark text-white hover:bg-green-800`}>
-              {busy === 'download' ? <Spinner label="Creating image" /> : <><DownloadIcon /> Download</>}
-            </button>
-            {canShare && (
-              <button onClick={handleShare} disabled={!!busy} className={`${actionButton} bg-gray-900 text-white hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200`}>
-                {busy === 'share' ? <Spinner label="Creating image" /> : <><ShareIcon /> Share</>}
-              </button>
-            )}
-            {canCopy && (
-              <button onClick={handleCopy} disabled={!!busy} className={`${actionButton} bg-gray-100 dark:bg-brand-gray-300 hover:bg-gray-200 dark:hover:bg-brand-gray-200`}>
-                {busy === 'copy' ? <Spinner label="Creating image" /> : <><CopyIcon /> Copy</>}
-              </button>
-            )}
-          </div>
-
-          <div aria-live="polite" className="min-h-6 text-sm text-center">
-            {status && (
-              <span className={`inline-flex items-center gap-1.5 ${status.kind === 'success' ? 'text-brand-green-dark dark:text-brand-green' : 'text-red-600 dark:text-red-400'}`}>
-                {status.kind === 'success' ? <CheckIcon className="w-4 h-4" /> : <AlertIcon className="w-4 h-4" />}
-                {status.text}
-              </span>
-            )}
-          </div>
+          <ExportActions song={song} cardRef={cardRef} onSave={onSave} />
         </div>
       </div>
 
       {/* Controls */}
       <div className="lg:order-1 space-y-6">
+        <TemplatePicker song={song} customization={customization} artworkColors={artworkColors} onApply={setCustomization} />
+
         <Section title="Card size">
           <div role="radiogroup" aria-label="Card size" className="grid grid-cols-4 gap-2">
             {CARD_SIZE_OPTIONS.map(o => (
@@ -286,83 +184,7 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
           </div>
         </Section>
 
-        <Section title="Background">
-          <div className="mb-3">
-            <Segmented
-              label="Background type"
-              options={[{ id: 'solid', name: 'Solid' }, { id: 'gradient', name: 'Gradient' }]}
-              value={background.type}
-              onChange={type => setBackground({ type })}
-            />
-          </div>
-
-          {background.type === 'solid' ? (
-            <div className="space-y-3">
-              {artworkColors.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-brand-gray-100 mb-1.5">From artwork</p>
-                  <div className="flex flex-wrap gap-2">
-                    {artworkColors.map(color => (
-                      <Swatch
-                        key={color}
-                        background={color}
-                        label={`Artwork color ${color}`}
-                        selected={background.color.toLowerCase() === color.toLowerCase()}
-                        onClick={() => setBackground({ color })}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div>
-                <p className="text-xs text-gray-500 dark:text-brand-gray-100 mb-1.5">Presets</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {PRESET_COLORS.map(color => (
-                    <Swatch
-                      key={color}
-                      background={color}
-                      label={`Color ${color}`}
-                      selected={background.color.toLowerCase() === color.toLowerCase()}
-                      onClick={() => setBackground({ color })}
-                    />
-                  ))}
-                  <ColorInput label="Custom" value={background.color} onChange={color => setBackground({ color })} />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {gradientPresets.map((g, i) => (
-                  <Swatch
-                    key={`${g.from}-${g.to}-${i}`}
-                    background={`linear-gradient(45deg, ${g.from}, ${g.to})`}
-                    label={i === 0 && artworkGradient ? 'Artwork gradient' : `Gradient ${g.from} to ${g.to}`}
-                    selected={background.gradientFrom === g.from && background.gradientTo === g.to}
-                    onClick={() => setBackground({ gradientFrom: g.from, gradientTo: g.to })}
-                  />
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-3 rounded-lg bg-gray-50 dark:bg-brand-gray-300/60">
-                <ColorInput label="From" value={background.gradientFrom} onChange={gradientFrom => setBackground({ gradientFrom })} />
-                <ColorInput label="To" value={background.gradientTo} onChange={gradientTo => setBackground({ gradientTo })} />
-                <label className="flex items-center gap-2 text-sm font-medium flex-1 min-w-[160px]">
-                  Angle
-                  <input
-                    type="range"
-                    min={0}
-                    max={360}
-                    step={15}
-                    value={background.angle}
-                    onChange={e => setBackground({ angle: Number(e.target.value) })}
-                    className="flex-1 accent-brand-green"
-                  />
-                  <span className="w-10 text-right tabular-nums text-gray-500 dark:text-brand-gray-100">{background.angle}°</span>
-                </label>
-              </div>
-            </div>
-          )}
-        </Section>
+        <BackgroundControls song={song} background={customization.background} artworkColors={artworkColors} onChange={setBackground} />
 
         <Section title="Font">
           <Segmented
@@ -384,21 +206,11 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
           </Section>
 
           <Section title="Alignment">
-            <Segmented
-              label="Text alignment"
-              options={TEXT_ALIGN_OPTIONS}
-              value={customization.textAlign}
-              onChange={textAlign => update({ textAlign })}
-            />
+            <Segmented label="Text alignment" options={TEXT_ALIGN_OPTIONS} value={customization.textAlign} onChange={textAlign => update({ textAlign })} />
           </Section>
 
           <Section title="Text effect">
-            <Segmented
-              label="Text effect"
-              options={TEXT_EFFECT_OPTIONS}
-              value={customization.textEffect}
-              onChange={textEffect => update({ textEffect })}
-            />
+            <Segmented label="Text effect" options={TEXT_EFFECT_OPTIONS} value={customization.textEffect} onChange={textEffect => update({ textEffect })} />
           </Section>
 
           <Section title="Text color">
@@ -410,6 +222,20 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({ song, lyrics, customizati
             />
           </Section>
         </div>
+
+        <TextControls
+          lines={lines}
+          originals={originals}
+          caption={cardText.caption}
+          customization={customization}
+          artworkColors={artworkColors}
+          highlightMode={highlightMode}
+          onHighlightModeChange={setHighlightMode}
+          onEditLine={editLine}
+          onCaptionChange={caption => setCardText(t => ({ ...t, caption }))}
+          onClearHighlights={() => setCardText(t => ({ ...t, highlights: {} }))}
+          onChange={update}
+        />
       </div>
     </div>
   );

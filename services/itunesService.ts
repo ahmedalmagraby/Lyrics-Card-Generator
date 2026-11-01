@@ -9,6 +9,7 @@ export interface ITunesResult {
   collectionName: string;
   artworkUrl100?: string;
   trackTimeMillis?: number;
+  previewUrl?: string;
   wrapperType: string;
 }
 
@@ -42,6 +43,7 @@ export function mapResults(results: ITunesResult[]): Track[] {
       artworkUrl: artwork && resizeArtwork(artwork, 600),
       thumbnailUrl: artwork && resizeArtwork(artwork, 300),
       durationMs: item.trackTimeMillis,
+      previewUrl: item.previewUrl,
     });
   }
   return tracks;

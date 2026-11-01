@@ -40,7 +40,16 @@ export const TEXT_EFFECT_OPTIONS: readonly { id: TextEffect; name: string }[] = 
   { id: 'none', name: 'None' },
   { id: 'shadow', name: 'Shadow' },
   { id: 'outline', name: 'Outline' },
+  { id: 'glow', name: 'Glow' },
 ];
+
+/** Accent colors for highlighted words and the glow effect (artwork colors are offered too). */
+export const ACCENT_PRESETS = ['#1DB954', '#F7D774', '#FF2BD6', '#38BDF8', '#FF6A00', '#FFFFFF'];
+
+export const MAX_CAPTION_LENGTH = 80;
+
+/** Uploaded photos are downscaled to this many px on the long side. */
+export const PHOTO_MAX_SIZE = 1200;
 
 export const TEXT_ALIGN_OPTIONS: readonly { id: TextAlign; name: string }[] = [
   { id: 'left', name: 'Left' },
