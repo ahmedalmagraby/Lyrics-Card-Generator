@@ -98,6 +98,7 @@ const SearchStep: React.FC<SearchStepProps> = ({
             <input
               ref={inputRef}
               type="search"
+              dir="auto"
               enterKeyHint="search"
               aria-label="Song or artist"
               autoFocus={!results}
@@ -189,7 +190,7 @@ const SearchStep: React.FC<SearchStepProps> = ({
                 />
                 <button
                   onClick={() => onSelect(song)}
-                  className={`w-full text-left group p-2 rounded-xl transition-colors hover:bg-gray-100 dark:hover:bg-brand-gray-300 ${
+                  className={`w-full text-start group p-2 rounded-xl transition-colors hover:bg-gray-100 dark:hover:bg-brand-gray-300 ${
                     song.id === selectedId ? 'bg-gray-100 dark:bg-brand-gray-300 ring-2 ring-brand-green' : ''
                   }`}
                 >
@@ -207,10 +208,10 @@ const SearchStep: React.FC<SearchStepProps> = ({
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   </div>
-                  <p className="mt-2 font-semibold text-sm truncate" title={song.name}>
+                  <p dir="auto" className="mt-2 font-semibold text-sm truncate" title={song.name}>
                     {song.name}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-brand-gray-100 truncate" title={song.artist}>
+                  <p dir="auto" className="text-xs text-gray-500 dark:text-brand-gray-100 truncate" title={song.artist}>
                     {song.artist}
                   </p>
                 </button>

@@ -1,4 +1,5 @@
 import type { CardSize, TextAlign, TextEffect } from './types';
+import type { TextDirection } from './utils/script';
 
 export const PRESET_COLORS = [
   '#1DB954', // Green
@@ -21,13 +22,13 @@ export const GRADIENT_PRESETS = [
 ];
 
 export const FONT_OPTIONS = [
-  { name: 'Default', className: 'font-lora' },
-  { name: 'Classic', className: 'font-eb-garamond' },
-  { name: 'Modern', className: 'font-inter' },
-  { name: 'Elegant', className: 'font-raleway' },
-  { name: 'Bold', className: 'font-oswald' },
-  { name: 'Script', className: 'font-dancing-script' },
-  { name: 'Handwritten', className: 'font-caveat' },
+  { name: 'Default', className: 'font-lora', family: 'Lora', generic: 'serif', scriptStyle: 'serif' },
+  { name: 'Classic', className: 'font-eb-garamond', family: 'EB Garamond', generic: 'serif', scriptStyle: 'serif' },
+  { name: 'Modern', className: 'font-inter', family: 'Inter', generic: 'sans-serif', scriptStyle: 'sans' },
+  { name: 'Elegant', className: 'font-raleway', family: 'Raleway', generic: 'sans-serif', scriptStyle: 'sans' },
+  { name: 'Bold', className: 'font-oswald', family: 'Oswald', generic: 'sans-serif', scriptStyle: 'sans' },
+  { name: 'Script', className: 'font-dancing-script', family: 'Dancing Script', generic: 'cursive', scriptStyle: 'serif' },
+  { name: 'Handwritten', className: 'font-caveat', family: 'Caveat', generic: 'cursive', scriptStyle: 'serif' },
 ] as const;
 
 export const FONT_SIZE_OPTIONS = [
@@ -52,10 +53,20 @@ export const MAX_CAPTION_LENGTH = 80;
 export const PHOTO_MAX_SIZE = 1200;
 
 export const TEXT_ALIGN_OPTIONS: readonly { id: TextAlign; name: string }[] = [
-  { id: 'left', name: 'Left' },
+  { id: 'start', name: 'Left' },
   { id: 'center', name: 'Center' },
-  { id: 'right', name: 'Right' },
+  { id: 'end', name: 'Right' },
 ];
+
+const RTL_TEXT_ALIGN_OPTIONS: readonly { id: TextAlign; name: string }[] = [
+  { id: 'end', name: 'Left' },
+  { id: 'center', name: 'Center' },
+  { id: 'start', name: 'Right' },
+];
+
+/** The alignment buttons always read Left, Center, Right; what each one stores depends on the direction. */
+export const textAlignOptions = (direction: TextDirection) =>
+  direction === 'rtl' ? RTL_TEXT_ALIGN_OPTIONS : TEXT_ALIGN_OPTIONS;
 
 /** Card width is fixed; `aspect` is width / height (null = grows with content). */
 export const CARD_SIZE_OPTIONS: readonly { id: CardSize; name: string; hint: string; aspect: number | null }[] = [

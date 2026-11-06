@@ -52,7 +52,8 @@ export interface Background {
 }
 
 export type TextEffect = 'none' | 'shadow' | 'outline' | 'glow';
-export type TextAlign = 'left' | 'center' | 'right';
+/** Logical: `start` is the side a line begins on, so it means right on right-to-left cards. */
+export type TextAlign = 'start' | 'center' | 'end';
 export type CardSize = 'classic' | 'square' | 'portrait' | 'story';
 export type HighlightStyle = 'color' | 'marker';
 

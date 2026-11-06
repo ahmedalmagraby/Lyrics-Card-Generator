@@ -103,8 +103,8 @@ const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({
           className="w-16 h-16 rounded-lg object-cover shadow shrink-0"
         />
         <div className="min-w-0 flex-1">
-          <h2 className="text-xl sm:text-2xl font-bold truncate">{song.name}</h2>
-          <p className="text-gray-600 dark:text-brand-gray-100 truncate">{song.artist}</p>
+          <h2 dir="auto" className="text-xl sm:text-2xl font-bold truncate">{song.name}</h2>
+          <p dir="auto" className="text-gray-600 dark:text-brand-gray-100 truncate">{song.artist}</p>
         </div>
         <PreviewButton url={song.previewUrl} title={song.name} audio={audio} />
       </div>
@@ -121,6 +121,7 @@ const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({
             <textarea
               id="manual-lyrics-input"
               ref={textareaRef}
+              dir="auto"
               value={manualText}
               onChange={e => setManualText(e.target.value)}
               maxLength={20000}
@@ -203,6 +204,7 @@ const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({
                   <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   <input
                     type="search"
+                    dir="auto"
                     value={filter}
                     onChange={e => setFilter(e.target.value)}
                     placeholder="Find a line…"
@@ -286,9 +288,10 @@ const LyricsSelectStep: React.FC<LyricsSelectStepProps> = ({
                     <li key={index}>
                       <button
                         type="button"
+                        dir="auto"
                         aria-pressed={isSelected}
                         onClick={e => onLyricSelect(index, e.shiftKey)}
-                        className={`w-full flex items-center gap-3 text-left px-4 py-2.5 rounded-lg text-base sm:text-lg transition-colors ${
+                        className={`w-full flex items-center gap-3 text-start px-4 py-2.5 rounded-lg text-base sm:text-lg transition-colors ${
                           isSelected
                             ? 'bg-brand-green-dark text-white'
                             : 'bg-gray-50 dark:bg-brand-gray-300/60 hover:bg-gray-100 dark:hover:bg-brand-gray-300'

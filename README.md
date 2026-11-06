@@ -7,6 +7,7 @@ A React app for turning your favorite song lyrics into shareable image cards. Se
 * **Song search** using the iTunes Search API, with results shown right under the search box, loading skeletons and recent searches.
 * **Audio previews**: play a song's 30-second preview from the results or while picking lyrics.
 * **Lyrics** from LRCLIB. Uses synced lyrics when available, falls back to plain lyrics, and retries with a fuzzy search (stripping "feat." / "Remastered" suffixes) when the exact lookup misses. If a song has no lyrics, or you want different wording, you can paste your own.
+* **Lyrics in any direction**: Arabic and Hebrew lyrics run right to left automatically, on the card and in every list and text box, and mixed lines keep their words in the right order. Arabic, Hebrew, Japanese, Korean and Chinese each get a matching font, which only downloads when a card needs it.
 * **Line selection**: click to toggle, Shift-click to select a range, filter to find a line in long songs.
 * **Customization**:
   * One-tap templates (Artwork Blur, Spotlight, Minimal, Neon, Sunset, Night Story, Notebook) and a Surprise me shuffle.
@@ -26,7 +27,7 @@ A React app for turning your favorite song lyrics into shareable image cards. Se
 * [React](https://react.dev/) 19 + [TypeScript](https://www.typescriptlang.org/) (strict)
 * [Vite](https://vitejs.dev/) 6
 * [Tailwind CSS](https://tailwindcss.com/) 4 via `@tailwindcss/vite`
-* Self-hosted fonts via [Fontsource](https://fontsource.org/)
+* Self-hosted fonts via [Fontsource](https://fontsource.org/), including Noto fonts for Arabic, Hebrew and CJK
 * [modern-screenshot](https://github.com/qq15725/modern-screenshot) for image export (loaded on demand)
 * [Vitest](https://vitest.dev/) for unit tests
 
@@ -75,7 +76,7 @@ The app is served from `/Lyrics-Card-Generator/` (see `base` in `vite.config.ts`
 │   ├── LyricsCard.tsx     # The card that gets rendered to PNG
 │   └── ...
 ├── services/              # iTunes and LRCLIB clients (with caching)
-├── utils/                 # Color math, artwork palette, filename, export helpers
+├── utils/                 # Color math, artwork palette, filename, export helpers, script and direction detection
 ├── public/                # Favicon and placeholder artwork
 ├── App.tsx                # Flow, state and navigation
 ├── constants.ts           # Colors, fonts, card sizes

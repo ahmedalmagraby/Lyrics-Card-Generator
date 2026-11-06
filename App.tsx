@@ -6,6 +6,7 @@ import { loadSavedCards, newCardId, persistCards, upsertCard } from './services/
 import { FONT_OPTIONS, FONT_SIZE_OPTIONS, GRADIENT_PRESETS, PRESET_COLORS } from './constants';
 import { prefersLightText, vividColor } from './utils/color';
 import { extractColors } from './utils/extractColors';
+import { normalizeTextAlign } from './utils/script';
 import { useAudioPreview } from './hooks/useAudioPreview';
 import StepIndicator from './components/StepIndicator';
 import SearchStep from './components/SearchStep';
@@ -27,7 +28,7 @@ const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
   fontFamily: FONT_OPTIONS[0].className,
   fontSize: FONT_SIZE_OPTIONS[1].className,
   textEffect: 'none',
-  textAlign: 'left',
+  textAlign: 'start',
   cardSize: 'classic',
   accentColor: PRESET_COLORS[0],
   highlightStyle: 'color',
@@ -39,6 +40,7 @@ const EMPTY_CARD_TEXT: CardText = { edits: {}, highlights: {}, caption: '' };
 const withDefaults = (c: CustomizationOptions): CustomizationOptions => ({
   ...DEFAULT_CUSTOMIZATION,
   ...c,
+  textAlign: normalizeTextAlign(c.textAlign),
   background: { ...DEFAULT_CUSTOMIZATION.background, ...c.background },
 });
 

@@ -4,6 +4,7 @@ export function cardFilename(artist: string, title: string): string {
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '') // strip accents
+    .normalize('NFC') // put Korean and Japanese characters back together
     .replace(/[/\\:*?"<>|.,'()[\]{}!@#$%^&+=~`;]/g, '')
     .trim()
     .replace(/\s+/g, '-')

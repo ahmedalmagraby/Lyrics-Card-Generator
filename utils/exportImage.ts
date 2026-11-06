@@ -1,11 +1,23 @@
+import { embeddedFontCss } from './exportFonts';
+import { loadFontFamilies, stackFamilies } from './scriptFonts';
+
+/** Makes sure the card's fonts are available, and returns the options that embed them in the image. */
+async function fontOptions(node: HTMLElement) {
+  await loadFontFamilies(stackFamilies(getComputedStyle(node).fontFamily));
+  await document.fonts.ready;
+  const cssText = await embeddedFontCss(node);
+  return cssText ? { font: { cssText } } : {};
+}
+
 /**
  * Renders a DOM node to a high-resolution PNG. modern-screenshot is loaded on demand and
  * draws the node through the browser's own layout engine (an SVG foreignObject), so the
  * image matches what's on screen, including text positioning and fonts.
  */
 export async function renderToBlob(node: HTMLElement): Promise<Blob> {
-  const [{ domToBlob }] = await Promise.all([import('modern-screenshot'), document.fonts.ready]);
+  const [{ domToBlob }, font] = await Promise.all([import('modern-screenshot'), fontOptions(node)]);
   return domToBlob(node, {
+    ...font,
     // Layout size, not the on-screen size: the preview is scaled down with a CSS transform on phones.
     width: node.offsetWidth,
     height: node.offsetHeight,
@@ -19,8 +31,9 @@ export async function renderToBlob(node: HTMLElement): Promise<Blob> {
 
 /** Small preview for the saved-cards gallery (WebP keeps the rounded corners transparent). */
 export async function renderThumbnail(node: HTMLElement): Promise<string> {
-  const [{ domToWebp }] = await Promise.all([import('modern-screenshot'), document.fonts.ready]);
+  const [{ domToWebp }, font] = await Promise.all([import('modern-screenshot'), fontOptions(node)]);
   return domToWebp(node, {
+    ...font,
     width: node.offsetWidth,
     height: node.offsetHeight,
     scale: 0.5,

@@ -5,10 +5,11 @@ import {
   CARD_WIDTH,
   FONT_OPTIONS,
   FONT_SIZE_OPTIONS,
-  TEXT_ALIGN_OPTIONS,
   TEXT_EFFECT_OPTIONS,
+  textAlignOptions,
 } from '../constants';
 import { prefersLightTextFor } from '../utils/color';
+import { cardDirection } from '../utils/script';
 import { toggleIndex } from '../utils/words';
 import LyricsCard from './LyricsCard';
 import { AlertIcon } from './Icons';
@@ -51,6 +52,8 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
   const [overflowing, setOverflowing] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
 
+  const direction = cardDirection(lines.map(line => line.text), song.name);
+
   const update = (patch: Partial<CustomizationOptions>) => setCustomization(c => ({ ...c, ...patch }));
 
   // Changing the background also picks the more readable text color; the toggle can override it.
@@ -88,7 +91,12 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
     const observer = new ResizeObserver(measure);
     observer.observe(preview);
     observer.observe(card);
-    return () => observer.disconnect();
+    // Script fonts arrive after the first render and can change how much text fits.
+    document.fonts.addEventListener('loadingdone', measure);
+    return () => {
+      observer.disconnect();
+      document.fonts.removeEventListener('loadingdone', measure);
+    };
   }, []);
 
   useEffect(() => {
@@ -206,7 +214,7 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
           </Section>
 
           <Section title="Alignment">
-            <Segmented label="Text alignment" options={TEXT_ALIGN_OPTIONS} value={customization.textAlign} onChange={textAlign => update({ textAlign })} />
+            <Segmented label="Text alignment" options={textAlignOptions(direction)} value={customization.textAlign} onChange={textAlign => update({ textAlign })} />
           </Section>
 
           <Section title="Text effect">

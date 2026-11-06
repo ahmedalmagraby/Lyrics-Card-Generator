@@ -94,6 +94,7 @@ const TextControls: React.FC<TextControlsProps> = ({
             return (
               <div key={line.id} className="flex items-center gap-2">
                 <input
+                  dir="auto"
                   value={line.text}
                   onChange={e => onEditLine(line.id, e.target.value)}
                   aria-label={`Lyric line: ${originals[line.id]}`}
@@ -114,6 +115,7 @@ const TextControls: React.FC<TextControlsProps> = ({
           <label className="block pt-2">
             <span className="text-xs text-gray-500 dark:text-brand-gray-100">Caption (optional)</span>
             <input
+              dir="auto"
               value={caption}
               maxLength={MAX_CAPTION_LENGTH}
               onChange={e => onCaptionChange(e.target.value)}

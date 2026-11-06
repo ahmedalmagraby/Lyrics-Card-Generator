@@ -1,7 +1,9 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useEffect, useMemo } from 'react';
 import type { CardLine, CustomizationOptions, Track } from '../types';
 import { CARD_SIZE_OPTIONS, CARD_WIDTH, PLACEHOLDER_ARTWORK } from '../constants';
 import { backgroundToCss, prefersLightText } from '../utils/color';
+import { cardDirection, detectScripts, physicalAlign } from '../utils/script';
+import { cardFontStack, loadFontFamilies, stackFamilies } from '../utils/scriptFonts';
 import { tokenize } from '../utils/words';
 
 interface LyricsCardProps {
@@ -18,6 +20,21 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(
     const { background, isTextLight, fontFamily, fontSize, textEffect, textAlign, cardSize, accentColor, highlightStyle } =
       customization;
     const textColor = isTextLight ? '#ffffff' : '#000000';
+
+    const direction = cardDirection(lines.map(line => line.text), song.name);
+    const align = physicalAlign(textAlign, direction);
+    const scripts = useMemo(
+      () => detectScripts([song.name, song.artist, caption, ...lines.map(line => line.text)].join('\n')),
+      [song.name, song.artist, caption, lines]
+    );
+    const fontStack = cardFontStack(fontFamily, scripts);
+    // Arabic letters and their marks reach further above and below the line than Latin ones.
+    const lineHeight = scripts.includes('arabic') ? 1.6 : undefined;
+
+    useEffect(() => {
+      if (fontStack) loadFontFamilies(stackFamilies(fontStack));
+    }, [fontStack]);
+
     const aspect = CARD_SIZE_OPTIONS.find(o => o.id === cardSize)?.aspect ?? null;
     const imageSrc =
       background.type === 'artwork' ? song.artworkUrl : background.type === 'photo' ? background.photo : undefined;
@@ -91,8 +108,10 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(
     return (
       <div
         ref={ref}
+        dir={direction}
         className={`relative isolate p-6 rounded-2xl flex flex-col overflow-hidden ${fontFamily}`}
         style={{
+          fontFamily: fontStack,
           width: CARD_WIDTH,
           height: aspect ? Math.round(CARD_WIDTH / aspect) : undefined,
           background: backgroundToCss(background),
@@ -132,9 +151,11 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(
             className="w-16 h-16 rounded-lg shrink-0 object-cover"
             style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}
           />
-          <div className="flex-1 min-w-0">
-            <p className="text-2xl font-bold leading-tight break-words">{song.name}</p>
-            <p className="text-base leading-tight mt-0.5 break-words" style={{ opacity: 0.9 }}>
+          <div className="flex-1 min-w-0" style={{ textAlign: direction === 'rtl' ? 'right' : 'left' }}>
+            <p dir="auto" className="text-2xl font-bold leading-tight break-words" style={{ lineHeight }}>
+              {song.name}
+            </p>
+            <p dir="auto" className="text-base leading-tight mt-0.5 break-words" style={{ opacity: 0.9, lineHeight }}>
               {song.artist}
             </p>
           </div>
@@ -142,16 +163,26 @@ const LyricsCard = forwardRef<HTMLDivElement, LyricsCardProps>(
 
         <div className="w-full my-4 shrink-0" style={separatorStyle} />
 
-        <div className={`flex-grow flex flex-col gap-2.5 ${aspect ? 'justify-center' : ''}`} style={{ textAlign }}>
+        <div className={`flex-grow flex flex-col gap-2.5 ${aspect ? 'justify-center' : ''}`} style={{ textAlign: align }}>
           {lines.map(line => (
-            <p key={line.id} className={`${fontSize} font-bold leading-tight whitespace-pre-wrap break-words`}>
+            <p
+              key={line.id}
+              dir="auto"
+              className={`${fontSize} font-bold leading-tight whitespace-pre-wrap break-words`}
+              style={{ lineHeight }}
+            >
               {renderLine(line)}
             </p>
           ))}
         </div>
 
         {caption.trim() && (
-          <p className="mt-4 shrink-0 text-base italic leading-snug break-words" style={{ textAlign, opacity: 0.85 }}>
+          <p
+            dir="auto"
+            className="mt-4 shrink-0 text-base italic leading-snug break-words"
+            // Arabic and CJK have no italics, so slanting them just looks broken.
+            style={{ textAlign: align, opacity: 0.85, lineHeight, fontStyle: detectScripts(caption).length ? 'normal' : undefined }}
+          >
             {caption.trim()}
           </p>
         )}

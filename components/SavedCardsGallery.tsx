@@ -30,7 +30,7 @@ const SavedCardsGallery: React.FC<SavedCardsGalleryProps> = ({ cards, openingId,
               type="button"
               onClick={() => onOpen(card)}
               disabled={!!openingId}
-              className="w-full text-left rounded-xl p-1.5 hover:bg-gray-100 dark:hover:bg-brand-gray-300 transition-colors disabled:cursor-wait"
+              className="w-full text-start rounded-xl p-1.5 hover:bg-gray-100 dark:hover:bg-brand-gray-300 transition-colors disabled:cursor-wait"
               aria-label={`Open card for ${card.song.name} by ${card.song.artist}`}
             >
               <div className="relative aspect-[4/5] rounded-lg overflow-hidden bg-gray-100 dark:bg-brand-gray-300 flex items-center justify-center">
@@ -41,7 +41,7 @@ const SavedCardsGallery: React.FC<SavedCardsGalleryProps> = ({ cards, openingId,
                   </span>
                 )}
               </div>
-              <p className="mt-1.5 text-xs font-semibold truncate">{card.song.name}</p>
+              <p dir="auto" className="mt-1.5 text-xs font-semibold truncate">{card.song.name}</p>
               <p className="text-[11px] text-gray-500 dark:text-brand-gray-100">{dateFormat.format(card.savedAt)}</p>
             </button>
             <button

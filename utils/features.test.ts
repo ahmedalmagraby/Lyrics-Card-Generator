@@ -11,7 +11,7 @@ const base: CustomizationOptions = {
   fontFamily: 'font-lora',
   fontSize: 'text-2xl',
   textEffect: 'none',
-  textAlign: 'left',
+  textAlign: 'start',
   cardSize: 'classic',
   accentColor: '#1DB954',
   highlightStyle: 'color',
@@ -86,5 +86,24 @@ describe('upsertCard', () => {
   it('caps the list', () => {
     const list = upsertCard([card('a', 1), card('b', 2)], card('c', 3), 2);
     expect(list.map(c => c.id)).toEqual(['c', 'a']);
+  });
+});
+
+describe('tokenize with CJK text', () => {
+  it('splits Japanese and Chinese lines without spaces into several words', () => {
+    for (const line of ['私は東京に住んでいます', '我喜欢听音乐']) {
+      const tokens = tokenize(line);
+      expect(tokens.filter(t => t.word !== null).length).toBeGreaterThan(1);
+      expect(tokens.map(t => t.text).join('')).toBe(line);
+    }
+  });
+
+  it('keeps Arabic and Korean words whole, as they use spaces', () => {
+    expect(tokenize('مرحبا بالعالم').filter(t => t.word !== null).map(t => t.text)).toEqual(['مرحبا', 'بالعالم']);
+    expect(tokenize('안녕하세요 세상').filter(t => t.word !== null).map(t => t.text)).toEqual(['안녕하세요', '세상']);
+  });
+
+  it('leaves Latin words untouched', () => {
+    expect(tokenize("don't stop").filter(t => t.word !== null).map(t => t.text)).toEqual(["don't", 'stop']);
   });
 });
