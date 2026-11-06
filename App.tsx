@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppStep, CardLine, CardText, CustomizationOptions, LyricsResult, SavedCard, Track } from './types';
 import { searchTracks } from './services/itunesService';
-import { fetchLyrics } from './services/lyricsService';
+import { fetchLyrics, parseManualLyrics, rebuildManualLyrics } from './services/lyricsService';
 import { loadSavedCards, newCardId, persistCards, upsertCard } from './services/galleryStore';
 import { FONT_OPTIONS, FONT_SIZE_OPTIONS, GRADIENT_PRESETS, PRESET_COLORS } from './constants';
 import { prefersLightText, vividColor } from './utils/color';
@@ -90,6 +90,8 @@ export default function App() {
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
   const [lyricsError, setLyricsError] = useState<string | null>(null);
+  const [lyricsNotice, setLyricsNotice] = useState<string | null>(null);
+  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
   // Indices (not text) so duplicate lines are handled and song order is kept.
   const [selectedLineIndices, setSelectedLineIndices] = useState<number[]>([]);
   const lastClickedIndex = useRef<number | null>(null);
@@ -172,6 +174,7 @@ export default function App() {
 
     setIsLoadingLyrics(true);
     setLyricsError(null);
+    setLyricsNotice(null);
     setLyrics(null);
     try {
       const result = await fetchLyrics(song, controller.signal);
@@ -187,6 +190,7 @@ export default function App() {
 
   const handleSelectSong = (song: Track) => {
     if (audio.playingUrl && audio.playingUrl !== song.previewUrl) audio.stop();
+    setLyricsNotice(null);
     if (song.id !== selectedSong?.id) {
       setSelectedSong(song);
       setSelectedLineIndices([]);
@@ -248,6 +252,52 @@ export default function App() {
     lastClickedIndex.current = index;
   };
 
+  const handleUseFoundLyrics = async () => {
+    if (!selectedSong) return;
+    lyricsAbort.current?.abort();
+    const controller = new AbortController();
+    lyricsAbort.current = controller;
+
+    setIsLoadingLyrics(true);
+    setLyricsNotice(null);
+    try {
+      const result = await fetchLyrics(selectedSong, controller.signal);
+      if (result.lines.length > 0) {
+        setLyrics(result);
+        setSelectedLineIndices([]);
+        setCardText(EMPTY_CARD_TEXT);
+        lastClickedIndex.current = null;
+      } else {
+        setLyricsNotice('No lyrics were found for this song, so yours were kept.');
+      }
+    } catch (err) {
+      if (isAbort(err)) return;
+      console.error(err);
+      setLyricsNotice('Could not load lyrics, so yours were kept. Check your connection and try again.');
+    } finally {
+      if (lyricsAbort.current === controller) setIsLoadingLyrics(false);
+    }
+  };
+
+  const handleManualLyrics = (text: string) => {
+    const nextResult = parseManualLyrics(text);
+    const isIdentical =
+      lyrics?.manual &&
+      lyrics.lines.length === nextResult.lines.length &&
+      lyrics.lines.every((line, i) => line.line === nextResult.lines[i].line);
+
+    if (isIdentical) return;
+
+    lyricsAbort.current?.abort();
+    setLyrics(nextResult);
+    setLyricsError(null);
+    setLyricsNotice(null);
+    setIsLoadingLyrics(false);
+    setSelectedLineIndices([]);
+    setCardText(EMPTY_CARD_TEXT);
+    lastClickedIndex.current = null;
+  };
+
   const originals = useMemo(() => {
     const map: Record<number, string> = {};
     for (const i of selectedLineIndices) if (lyrics?.lines[i]) map[i] = lyrics.lines[i].line;
@@ -275,6 +325,7 @@ export default function App() {
       cardText,
       customization,
       thumbnail,
+      ...(lyrics?.manual ? { manualLyrics: lyrics.lines.map(l => l.line) } : {}),
     };
     setSavedCards(cards => persistCards(upsertCard(cards, card)));
   };
@@ -285,9 +336,10 @@ export default function App() {
     if (openingCardId) return;
     setOpeningCardId(card.id);
     setGalleryError(null);
+    setLyricsNotice(null);
     audio.stop();
     try {
-      const result = await fetchLyrics(card.song);
+      const result = card.manualLyrics ? rebuildManualLyrics(card.manualLyrics) : await fetchLyrics(card.song);
       // If the lyrics source changed since saving, keep the saved wording as edits.
       const edits = { ...card.cardText.edits };
       card.lineIndices.forEach((index, n) => {
@@ -353,10 +405,14 @@ export default function App() {
             lyrics={lyrics}
             isLoading={isLoadingLyrics}
             error={lyricsError}
+            notice={lyricsNotice}
             onRetry={() => loadLyrics(selectedSong)}
+            onUseFoundLyrics={handleUseFoundLyrics}
             selectedIndices={selectedLineIndices}
             onLyricSelect={handleLyricsSelect}
             onClear={() => setSelectedLineIndices([])}
+            onManualLyrics={handleManualLyrics}
+            onEditingChange={setIsEditingLyrics}
           />
         );
       case AppStep.CUSTOMIZE:
@@ -422,7 +478,7 @@ export default function App() {
               {step === AppStep.SELECT_LYRICS && (
                 <button
                   onClick={() => goForward(AppStep.CUSTOMIZE)}
-                  disabled={selectedLineIndices.length === 0}
+                  disabled={selectedLineIndices.length === 0 || isEditingLyrics || isLoadingLyrics}
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-white bg-brand-green-dark hover:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue <ArrowRightIcon />

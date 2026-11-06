@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { cleanTitle, parseLRC, parsePlain, pickBest, primaryArtist, toResult, type LrcLibRecord } from './lyricsService';
+import {
+  cleanTitle,
+  parseLRC,
+  parseManualLyrics,
+  parsePlain,
+  pickBest,
+  primaryArtist,
+  rebuildManualLyrics,
+  toResult,
+  type LrcLibRecord,
+} from './lyricsService';
 
 const record = (overrides: Partial<LrcLibRecord>): LrcLibRecord => ({
   id: 1,
@@ -55,6 +65,90 @@ describe('parsePlain', () => {
       { time: 1, line: 'Two' },
       { time: 2, line: 'Three' },
     ]);
+  });
+});
+
+describe('parseManualLyrics', () => {
+  it('drops blank lines and lines of only ♪ and trims whitespace', () => {
+    const input = '  First line  \r\n\r\n♪\n  ♪ ♪  \nSecond line\r\n   ';
+    const result = parseManualLyrics(input);
+    expect(result).toEqual({
+      lines: [
+        { time: 0, line: 'First line' },
+        { time: 1, line: 'Second line' },
+      ],
+      synced: false,
+      instrumental: false,
+      manual: true,
+    });
+  });
+
+  it('handles CRLF line endings', () => {
+    const result = parseManualLyrics('Line 1\r\nLine 2\r\nLine 3');
+    expect(result.lines).toEqual([
+      { time: 0, line: 'Line 1' },
+      { time: 1, line: 'Line 2' },
+      { time: 2, line: 'Line 3' },
+    ]);
+    expect(result.manual).toBe(true);
+    expect(result.synced).toBe(false);
+    expect(result.instrumental).toBe(false);
+  });
+
+  it('returns no lines for empty input or input with only blanks and ♪', () => {
+    expect(parseManualLyrics('')).toEqual({
+      lines: [],
+      synced: false,
+      instrumental: false,
+      manual: true,
+    });
+
+    expect(parseManualLyrics('   \r\n\n  ♪  \n\t  ')).toEqual({
+      lines: [],
+      synced: false,
+      instrumental: false,
+      manual: true,
+    });
+  });
+});
+
+describe('rebuildManualLyrics', () => {
+  it('rebuilds from a saved string[] keeping line order and indices', () => {
+    const saved = ['First line', 'Second line', 'Third line'];
+    const result = rebuildManualLyrics(saved);
+    expect(result).toEqual({
+      lines: [
+        { time: 0, line: 'First line' },
+        { time: 1, line: 'Second line' },
+        { time: 2, line: 'Third line' },
+      ],
+      synced: false,
+      instrumental: false,
+      manual: true,
+    });
+  });
+
+  it('handles empty saved string[]', () => {
+    expect(rebuildManualLyrics([])).toEqual({
+      lines: [],
+      synced: false,
+      instrumental: false,
+      manual: true,
+    });
+  });
+
+  it('keeps line order and indices through a parse and save round trip', () => {
+    const text = '  Opening verse  \r\n\r\n♪\nChorus line\r\n  Outro  ';
+    const parsed = parseManualLyrics(text);
+    const savedStrings = parsed.lines.map(l => l.line);
+    const rebuilt = rebuildManualLyrics(savedStrings);
+
+    expect(rebuilt).toEqual(parsed);
+    expect(rebuilt.lines[0]).toEqual({ time: 0, line: 'Opening verse' });
+    expect(rebuilt.lines[1]).toEqual({ time: 1, line: 'Chorus line' });
+    expect(rebuilt.lines[2]).toEqual({ time: 2, line: 'Outro' });
+    expect(rebuilt.manual).toBe(true);
+    expect(rebuilt.synced).toBe(false);
   });
 });
 

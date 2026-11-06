@@ -47,6 +47,26 @@ export function parsePlain(content: string): LyricsLine[] {
     .map((line, index) => ({ time: index, line }));
 }
 
+/** Parses manual lyrics text into a LyricsResult with manual: true, synced: false, instrumental: false. */
+export function parseManualLyrics(content: string): LyricsResult {
+  return {
+    lines: parsePlain(content),
+    synced: false,
+    instrumental: false,
+    manual: true,
+  };
+}
+
+/** Rebuilds a manual LyricsResult from a saved list of lines, preserving line indices. */
+export function rebuildManualLyrics(lines: string[]): LyricsResult {
+  return {
+    lines: lines.map((line, index) => ({ time: index, line })),
+    synced: false,
+    instrumental: false,
+    manual: true,
+  };
+}
+
 export function toResult(record: LrcLibRecord): LyricsResult {
   if (record.syncedLyrics) {
     const lines = parseLRC(record.syncedLyrics);

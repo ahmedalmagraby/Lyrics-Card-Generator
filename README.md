@@ -6,7 +6,7 @@ A React app for turning your favorite song lyrics into shareable image cards. Se
 
 * **Song search** using the iTunes Search API, with results shown right under the search box, loading skeletons and recent searches.
 * **Audio previews**: play a song's 30-second preview from the results or while picking lyrics.
-* **Lyrics** from LRCLIB. Uses synced lyrics when available, falls back to plain lyrics, and retries with a fuzzy search (stripping "feat." / "Remastered" suffixes) when the exact lookup misses.
+* **Lyrics** from LRCLIB. Uses synced lyrics when available, falls back to plain lyrics, and retries with a fuzzy search (stripping "feat." / "Remastered" suffixes) when the exact lookup misses. If a song has no lyrics, or you want different wording, you can paste your own.
 * **Line selection**: click to toggle, Shift-click to select a range, filter to find a line in long songs.
 * **Customization**:
   * One-tap templates (Artwork Blur, Spotlight, Minimal, Neon, Sunset, Night Story, Notebook) and a Surprise me shuffle.

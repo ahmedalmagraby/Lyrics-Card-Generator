@@ -29,6 +29,8 @@ export interface LyricsResult {
   /** False when only plain (unsynced) lyrics were available. */
   synced: boolean;
   instrumental: boolean;
+  /** True when lyrics were entered manually by the user. */
+  manual?: boolean;
 }
 
 /** `artwork` and `photo` draw an image (optionally blurred and dimmed) behind the text. */
@@ -93,4 +95,6 @@ export interface SavedCard {
   customization: CustomizationOptions;
   /** Small rendered preview as a data URL. */
   thumbnail: string;
+  /** Full list of manual lyrics lines if the card was made with manual lyrics. */
+  manualLyrics?: string[];
 }
