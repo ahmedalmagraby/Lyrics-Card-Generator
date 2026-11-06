@@ -8,6 +8,7 @@ import {
   TEXT_EFFECT_OPTIONS,
   textAlignOptions,
 } from '../constants';
+import { cardSong, labelSong } from '../utils/cardSong';
 import { prefersLightTextFor } from '../utils/color';
 import { cardDirection } from '../utils/script';
 import { toggleIndex } from '../utils/words';
@@ -52,7 +53,8 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
   const [overflowing, setOverflowing] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
 
-  const direction = cardDirection(lines.map(line => line.text), song.name);
+  const shownSong = cardSong(song, cardText);
+  const direction = cardDirection(lines.map(line => line.text), shownSong.name);
 
   const update = (patch: Partial<CustomizationOptions>) => setCustomization(c => ({ ...c, ...patch }));
 
@@ -75,6 +77,14 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
       const highlights = { ...t.highlights };
       delete highlights[lineId];
       return { ...t, edits, highlights };
+    });
+
+  const editName = (key: 'title' | 'artist', value: string, original: string) =>
+    setCardText(t => {
+      const next = { ...t };
+      if (value === original) delete next[key];
+      else next[key] = value;
+      return next;
     });
 
   // Scale the preview down to fit narrow screens. Export always renders at full size.
@@ -102,7 +112,7 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
   useEffect(() => {
     const card = cardRef.current;
     if (card) setOverflowing(card.scrollHeight > card.clientHeight + 1);
-  }, [customization, lines, cardText.caption]);
+  }, [customization, lines, cardText.caption, cardText.title, cardText.artist]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-6 lg:gap-8">
@@ -123,7 +133,7 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
               >
                 <LyricsCard
                   ref={cardRef}
-                  song={song}
+                  song={shownSong}
                   lines={lines}
                   caption={cardText.caption}
                   customization={customization}
@@ -157,7 +167,7 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
             </p>
           )}
 
-          <ExportActions song={song} cardRef={cardRef} onSave={onSave} />
+          <ExportActions song={labelSong(song, cardText)} cardRef={cardRef} onSave={onSave} />
         </div>
       </div>
 
@@ -232,6 +242,10 @@ const CustomizeStep: React.FC<CustomizeStepProps> = ({
         </div>
 
         <TextControls
+          song={song}
+          shownSong={shownSong}
+          onEditTitle={title => editName('title', title, song.name)}
+          onEditArtist={artist => editName('artist', artist, song.artist)}
           lines={lines}
           originals={originals}
           caption={cardText.caption}

@@ -17,11 +17,11 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ song, customization, ar
 
   return (
     <Section title="Templates">
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 custom-scrollbar">
+      <div className="grid grid-cols-4 gap-2">
         <button
           type="button"
           onClick={() => onApply(applyTemplate(customization, surpriseMe(ctx)))}
-          className="shrink-0 w-[4.5rem] h-24 rounded-xl flex flex-col items-center justify-center gap-1.5 text-xs font-semibold bg-gradient-to-br from-fuchsia-500 via-orange-400 to-yellow-300 text-gray-900 hover:brightness-105"
+          className="w-full rounded-xl flex flex-col items-center justify-center gap-1.5 text-xs font-semibold bg-gradient-to-br from-fuchsia-500 via-orange-400 to-yellow-300 text-gray-900 hover:brightness-105"
         >
           <ShuffleIcon className="w-6 h-6" />
           Surprise me
@@ -36,7 +36,7 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ song, customization, ar
               type="button"
               onClick={() => onApply(preview)}
               title={`Apply the ${t.name} template`}
-              className="shrink-0 w-[4.5rem] flex flex-col items-center gap-1 text-xs font-medium group"
+              className="w-full min-w-0 flex flex-col items-center gap-1 text-xs font-medium group"
             >
               <span
                 className={`relative isolate w-full h-[4.5rem] rounded-xl overflow-hidden flex items-center justify-center ring-1 ring-black/10 dark:ring-white/10 group-hover:ring-2 group-hover:ring-brand-green ${preview.fontFamily}`}

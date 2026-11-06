@@ -14,7 +14,7 @@ A React app for turning your favorite song lyrics into shareable image cards. Se
   * Card sizes: Classic (fits content), Square 1:1, Portrait 4:5, Story 9:16.
   * Backgrounds: colors extracted from the album artwork, presets, custom colors, gradients, the blurred album cover, or your own photo (with blur and dim controls).
   * Seven fonts, three text sizes, left/center/right alignment, shadow, outline or glow effects.
-  * Tap words on the card to highlight them (colored text or marker), edit lines, and add a caption.
+  * Tap words on the card to highlight them (colored text or marker), edit the song name, artist and lines, and add a caption.
   * Text color picked automatically for contrast (can be overridden).
 * **Export**: download a 3x PNG, share via the Web Share API (mobile), or copy the image to the clipboard. The export matches the preview exactly.
 * **Your cards**: saved or exported cards are kept in the browser, so you can reopen and tweak them later.

@@ -36,6 +36,9 @@ const DEFAULT_CUSTOMIZATION: CustomizationOptions = {
 
 const EMPTY_CARD_TEXT: CardText = { edits: {}, highlights: {}, caption: '' };
 
+/** New lyrics invalidate everything keyed to the old lines, but the song is still the same song. */
+const forNewLyrics = ({ title, artist }: CardText): CardText => ({ ...EMPTY_CARD_TEXT, title, artist });
+
 /** Fills in options added after a card was saved. */
 const withDefaults = (c: CustomizationOptions): CustomizationOptions => ({
   ...DEFAULT_CUSTOMIZATION,
@@ -267,7 +270,7 @@ export default function App() {
       if (result.lines.length > 0) {
         setLyrics(result);
         setSelectedLineIndices([]);
-        setCardText(EMPTY_CARD_TEXT);
+        setCardText(forNewLyrics);
         lastClickedIndex.current = null;
       } else {
         setLyricsNotice('No lyrics were found for this song, so yours were kept.');
@@ -296,7 +299,7 @@ export default function App() {
     setLyricsNotice(null);
     setIsLoadingLyrics(false);
     setSelectedLineIndices([]);
-    setCardText(EMPTY_CARD_TEXT);
+    setCardText(forNewLyrics);
     lastClickedIndex.current = null;
   };
 

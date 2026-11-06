@@ -76,6 +76,10 @@ export interface CardText {
   /** Word indices (see utils/words.ts) highlighted per line. */
   highlights: Record<number, number[]>;
   caption: string;
+  /** Song name shown on the card, when it differs from the catalog's. */
+  title?: string;
+  /** Artist shown on the card, when it differs from the catalog's. */
+  artist?: string;
 }
 
 export interface CardLine {

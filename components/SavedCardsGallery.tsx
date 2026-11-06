@@ -2,6 +2,7 @@ import React from 'react';
 import type { SavedCard } from '../types';
 import { TrashIcon } from './Icons';
 import Spinner from './Spinner';
+import { labelSong } from '../utils/cardSong';
 
 interface SavedCardsGalleryProps {
   cards: SavedCard[];
@@ -31,7 +32,7 @@ const SavedCardsGallery: React.FC<SavedCardsGalleryProps> = ({ cards, openingId,
               onClick={() => onOpen(card)}
               disabled={!!openingId}
               className="w-full text-start rounded-xl p-1.5 hover:bg-gray-100 dark:hover:bg-brand-gray-300 transition-colors disabled:cursor-wait"
-              aria-label={`Open card for ${card.song.name} by ${card.song.artist}`}
+              aria-label={`Open card for ${labelSong(card.song, card.cardText).name} by ${labelSong(card.song, card.cardText).artist}`}
             >
               <div className="relative aspect-[4/5] rounded-lg overflow-hidden bg-gray-100 dark:bg-brand-gray-300 flex items-center justify-center">
                 <img src={card.thumbnail} alt="" className="max-w-full max-h-full object-contain" loading="lazy" />
@@ -41,13 +42,13 @@ const SavedCardsGallery: React.FC<SavedCardsGalleryProps> = ({ cards, openingId,
                   </span>
                 )}
               </div>
-              <p dir="auto" className="mt-1.5 text-xs font-semibold truncate">{card.song.name}</p>
+              <p dir="auto" className="mt-1.5 text-xs font-semibold truncate">{labelSong(card.song, card.cardText).name}</p>
               <p className="text-[11px] text-gray-500 dark:text-brand-gray-100">{dateFormat.format(card.savedAt)}</p>
             </button>
             <button
               type="button"
               onClick={() => onDelete(card.id)}
-              aria-label={`Delete card for ${card.song.name}`}
+              aria-label={`Delete card for ${labelSong(card.song, card.cardText).name}`}
               className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-red-600 transition"
             >
               <TrashIcon className="w-3.5 h-3.5" />

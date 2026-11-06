@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CustomizationOptions, SavedCard } from '../types';
+import { cardSong, labelSong } from './cardSong';
 import { tokenize, toggleIndex } from './words';
 import { applyTemplate, surpriseMe, TEMPLATES } from './templates';
 import { upsertCard } from '../services/galleryStore';
@@ -105,5 +106,30 @@ describe('tokenize with CJK text', () => {
 
   it('leaves Latin words untouched', () => {
     expect(tokenize("don't stop").filter(t => t.word !== null).map(t => t.text)).toEqual(["don't", 'stop']);
+  });
+});
+
+describe('song names on the card', () => {
+  const song = { id: '1', name: 'Baadak Ala Baly', artist: 'Fairouz', album: 'A', artworkUrl: '', thumbnailUrl: '' };
+  const text = { edits: {}, highlights: {}, caption: '' };
+
+  it('uses the catalog names until they are edited', () => {
+    expect(cardSong(song, text)).toEqual(song);
+    expect(labelSong(song, text)).toEqual(song);
+  });
+
+  it('applies edits without changing the song used for lookups', () => {
+    const shown = cardSong(song, { ...text, title: 'بعدك على بالي', artist: 'فيروز' });
+    expect(shown.name).toBe('بعدك على بالي');
+    expect(shown.artist).toBe('فيروز');
+    expect(song.name).toBe('Baadak Ala Baly');
+    expect(shown.id).toBe('1');
+  });
+
+  it('keeps a cleared name blank on the card but not in labels', () => {
+    const cleared = { ...text, artist: '  ', title: '' };
+    expect(cardSong(song, cleared).name).toBe('');
+    expect(labelSong(song, cleared).name).toBe('Baadak Ala Baly');
+    expect(labelSong(song, cleared).artist).toBe('Fairouz');
   });
 });
